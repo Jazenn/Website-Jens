@@ -5,7 +5,14 @@ import * as THREE from 'three'
 import { AnimatePresence, motion } from 'framer-motion'
 import { Heart, Music, PenLine, Shield, UserRound, X } from 'lucide-react'
 
-const MEMORY_TYPES = ['foto', 'quote', 'bericht', 'video']
+const MEMORY_TYPES = ['foto', 'video', 'quote', 'tekst']
+const MEMORY_TYPE_COLORS = {
+  foto: '#ffffff',
+  video: '#997fff',
+  quote: '#95ff9a',
+  tekst: '#7dd3fc',
+}
+const CORE_MEMORY_COLOR = '#f59e0b'
 const MEMORY_TITLES = [
   'Een avond die bleef hangen',
   'Zijn lach in de kamer',
@@ -23,7 +30,7 @@ const MEMORY_TITLES = [
 
 function createMemories() {
   return Array.from({ length: 96 }, (_, index) => {
-    const type = MEMORY_TYPES[index % MEMORY_TYPES.length]
+    const type = MEMORY_TYPES[(index * 7 + Math.floor(index / 5)) % MEMORY_TYPES.length]
     const special = index % 13 === 0
     const cluster = index % 4
     const phi = Math.acos(1 - (2 * (index + 0.5)) / 96)
@@ -40,6 +47,8 @@ function createMemories() {
       author: ['Griffin', 'Een vriend', 'Familie', 'Iemand die hem mist'][index % 4],
       date: `${String((index % 28) + 1).padStart(2, '0')}-06-2025`,
       special,
+      candleCount: index % 13 === 0 ? 4 + (index % 5) : index % 4,
+      isCoreMemory: index % 13 === 0,
       x,
       y,
       z,
@@ -94,11 +103,7 @@ function createStarField(count, radius, color, size, opacity) {
     const drift = radius + Math.sin(index * 12.9898) * 140 + Math.cos(index * 4.711) * 55
     const warmth = 0.82 + ((Math.sin(index * 78.233) + 1) / 2) * 0.32
     const scale =
-      index % 41 === 0
-        ? 3.1
-        : index % 17 === 0
-          ? 2.25
-          : 0.45 + ((Math.cos(index * 19.19) + 1) / 2) * 1.45
+      index % 41 === 0 ? 3.1 : index % 17 === 0 ? 2.25 : 0.9 + ((Math.cos(index * 19.19) + 1) / 2) * 1.15
     const starColor = baseColor.clone().multiplyScalar(warmth)
 
     positions[index * 3] = drift * Math.cos(theta) * Math.sin(phi)
@@ -166,27 +171,27 @@ export default function ConstellationPage() {
       .graphData(graphData)
       .backgroundColor('rgba(0,0,0,0)')
       .nodeLabel((node) => `${node.title} · ${node.type}`)
-      .nodeColor((node) => (node.special ? '#f59e0b' : node.type === 'quote' ? '#ffffff' : '#a78bfa'))
-      .nodeVal((node) => (node.special ? 5 : 2.4))
-      .linkColor((link) => (link.source?.special || link.target?.special ? 'rgba(245,158,11,0.34)' : 'rgba(190,174,255,0.24)'))
-      .linkWidth((link) => (link.source?.special || link.target?.special ? 0.72 : 0.44 * link.strength))
+      .nodeColor((node) => (node.isCoreMemory ? CORE_MEMORY_COLOR : MEMORY_TYPE_COLORS[node.type] ?? '#c4b5fd'))
+      .nodeVal((node) => (node.isCoreMemory ? 5.4 : 2.4))
+      .linkColor((link) => (link.source?.isCoreMemory || link.target?.isCoreMemory ? 'rgba(245,158,11,0.34)' : 'rgba(190,174,255,0.24)'))
+      .linkWidth((link) => (link.source?.isCoreMemory || link.target?.isCoreMemory ? 0.72 : 0.44 * link.strength))
       .linkOpacity(0.58)
       .enableNodeDrag(false)
       .showNavInfo(false)
       .onNodeClick((node) => setSelectedMemory(node))
       .nodeThreeObject((node) => {
-        const color = node.special ? '#f59e0b' : node.type === 'quote' ? '#ffffff' : '#a78bfa'
+        const color = node.isCoreMemory ? CORE_MEMORY_COLOR : MEMORY_TYPE_COLORS[node.type] ?? '#c4b5fd'
         const group = new THREE.Group()
         const sphere = new THREE.Mesh(
-          new THREE.SphereGeometry(node.special ? 3.6 : 2.4, 24, 24),
+          new THREE.SphereGeometry(node.isCoreMemory ? 3.9 : 2.4, 24, 24),
           new THREE.MeshBasicMaterial({ color })
         )
         const glow = new THREE.Mesh(
-          new THREE.SphereGeometry(node.special ? 8 : 5, 24, 24),
+          new THREE.SphereGeometry(node.isCoreMemory ? 9.5 : 5, 24, 24),
           new THREE.MeshBasicMaterial({
             color,
             transparent: true,
-            opacity: node.special ? 0.18 : 0.1,
+            opacity: node.isCoreMemory ? 0.24 : 0.09,
             blending: THREE.AdditiveBlending,
           })
         )
@@ -195,7 +200,7 @@ export default function ConstellationPage() {
         return group
       })
 
-    const cameraDistance = window.innerWidth < 768 ? 680 : 500
+    const cameraDistance = window.innerWidth < 768 ? 1050 : 500
     graph.cameraPosition({ x: 0, y: 0, z: cameraDistance }, { x: 0, y: 0, z: 0 }, 1200)
     graph.cooldownTicks(1)
     graph.d3Force('charge', null)
@@ -211,9 +216,9 @@ export default function ConstellationPage() {
     graphInstanceRef.current = graph
 
     const universe = new THREE.Group()
-    universe.add(createStarField(320, 2600, '#ffffff', 5.4, 0.78))
-    universe.add(createStarField(180, 3400, '#a78bfa', 7.2, 0.52))
-    universe.add(createStarField(42, 3000, '#f59e0b', 9.6, 0.44))
+    universe.add(createStarField(320, 2600, '#f8fbff', 5.4, 0.78))
+    universe.add(createStarField(180, 3400, '#dbeafe', 7.2, 0.52))
+    universe.add(createStarField(42, 3000, '#fecdd3', 9.6, 0.44))
     graph.scene().add(universe)
 
     let lastTime = performance.now()
@@ -239,7 +244,7 @@ export default function ConstellationPage() {
       graph.controls().maxDistance = window.innerWidth < 768 ? 1050 : 910
       graph.width(window.innerWidth)
       graph.height(window.innerHeight)
-      graph.cameraPosition({ x: 0, y: 0, z: window.innerWidth < 768 ? 680 : 500 }, { x: 0, y: 0, z: 0 }, 600)
+      graph.cameraPosition({ x: 0, y: 0, z: window.innerWidth < 768 ? 1050 : 500 }, { x: 0, y: 0, z: 0 }, 600)
     }
 
     handleResize()
