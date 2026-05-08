@@ -3,8 +3,11 @@ import { Link } from 'react-router-dom'
 import ForceGraph3D from '3d-force-graph'
 import * as THREE from 'three'
 import { AnimatePresence, motion } from 'framer-motion'
-import { Heart, Music, PenLine, Shield, UserRound, X } from 'lucide-react'
+import { Heart, Music, PenLine, Shield, UserRound, Volume2, VolumeX, X } from 'lucide-react'
 
+const AMBIENT_AUDIO_SRC = '/audio/constellation-ambient.mp3'
+const CUSTOM_MEMORIES_KEY = 'jens-custom-memories'
+const PULSING_MEMORIES_KEY = 'jens-pulsing-memory-ids'
 const MEMORY_TYPES = ['foto', 'video', 'quote', 'tekst']
 const MEMORY_TYPE_COLORS = {
   foto: '#ffffff',
@@ -28,17 +31,24 @@ const MEMORY_TITLES = [
   'Een herinnering zonder woorden',
 ]
 
+function getMemoryPosition(index, total) {
+  const cluster = index % 4
+  const phi = Math.acos(1 - (2 * (index + 0.5)) / total)
+  const theta = index * Math.PI * (3 - Math.sqrt(5))
+  const radius = 140 + Math.sin(index * 1.7) * 4 + cluster * 1.4
+
+  return {
+    x: radius * Math.cos(theta) * Math.sin(phi),
+    y: radius * Math.sin(theta) * Math.sin(phi),
+    z: radius * Math.cos(phi),
+  }
+}
+
 function createMemories() {
   return Array.from({ length: 96 }, (_, index) => {
     const type = MEMORY_TYPES[(index * 7 + Math.floor(index / 5)) % MEMORY_TYPES.length]
     const special = index % 13 === 0
-    const cluster = index % 4
-    const phi = Math.acos(1 - (2 * (index + 0.5)) / 96)
-    const theta = index * Math.PI * (3 - Math.sqrt(5))
-    const radius = 140 + Math.sin(index * 1.7) * 4 + cluster * 1.4
-    const x = radius * Math.cos(theta) * Math.sin(phi)
-    const y = radius * Math.sin(theta) * Math.sin(phi)
-    const z = radius * Math.cos(phi)
+    const { x, y, z } = getMemoryPosition(index, 96)
 
     return {
       id: `memory-${index}`,
@@ -59,6 +69,26 @@ function createMemories() {
         type === 'quote'
           ? '“Sommige mensen laten licht achter, zelfs als ze er niet meer zijn.”'
           : 'Een plek voor een persoonlijke herinnering aan Jens. Later komt hier de echte tekst, foto of video die iemand heeft toegevoegd.',
+    }
+  })
+}
+
+function createCustomMemories(savedMemories) {
+  const total = 96 + savedMemories.length
+
+  return savedMemories.map((memory, customIndex) => {
+    const index = 96 + customIndex
+    const { x, y, z } = getMemoryPosition(index, total)
+
+    return {
+      ...memory,
+      special: false,
+      x,
+      y,
+      z,
+      fx: x,
+      fy: y,
+      fz: z,
     }
   })
 }
@@ -160,9 +190,39 @@ export default function ConstellationPage() {
   const animationFrameRef = useRef(null)
   const pointerRef = useRef({ active: false, x: 0 })
   const passiveDirectionRef = useRef(1)
+  const audioRef = useRef(null)
   const [selectedMemory, setSelectedMemory] = useState(null)
-  const memories = useMemo(() => createMemories(), [])
+  const [soundEnabled, setSoundEnabled] = useState(false)
+  const [customMemories] = useState(() => {
+    try {
+      return JSON.parse(localStorage.getItem(CUSTOM_MEMORIES_KEY) ?? '[]')
+    } catch {
+      return []
+    }
+  })
+  const [pulsingMemoryIds, setPulsingMemoryIds] = useState(() => {
+    try {
+      return JSON.parse(localStorage.getItem(PULSING_MEMORIES_KEY) ?? '[]')
+    } catch {
+      return []
+    }
+  })
+  const pulsingMemoryIdsRef = useRef(pulsingMemoryIds)
+  const memories = useMemo(() => [...createMemories(), ...createCustomMemories(customMemories)], [customMemories])
   const graphData = useMemo(() => ({ nodes: memories, links: createLinks(memories) }), [memories])
+
+  useEffect(() => {
+    pulsingMemoryIdsRef.current = pulsingMemoryIds
+  }, [pulsingMemoryIds])
+
+  useEffect(() => {
+    return () => {
+      if (audioRef.current) {
+        audioRef.current.stop()
+        audioRef.current = null
+      }
+    }
+  }, [])
 
   useEffect(() => {
     if (!graphRef.current) return
@@ -178,9 +238,25 @@ export default function ConstellationPage() {
       .linkOpacity(0.58)
       .enableNodeDrag(false)
       .showNavInfo(false)
-      .onNodeClick((node) => setSelectedMemory(node))
+      .onNodeClick((node) => {
+        setSelectedMemory(node)
+
+        if (pulsingMemoryIdsRef.current.includes(node.id)) {
+          const nextIds = pulsingMemoryIdsRef.current.filter((id) => id !== node.id)
+          pulsingMemoryIdsRef.current = nextIds
+          setPulsingMemoryIds(nextIds)
+          localStorage.setItem(PULSING_MEMORIES_KEY, JSON.stringify(nextIds))
+          const pulse = node.__threeObj?.userData?.pulse
+
+          if (pulse) {
+            pulse.userData.isPulse = false
+            pulse.material.opacity = 0
+          }
+        }
+      })
       .nodeThreeObject((node) => {
         const color = node.isCoreMemory ? CORE_MEMORY_COLOR : MEMORY_TYPE_COLORS[node.type] ?? '#c4b5fd'
+        const isPulsing = pulsingMemoryIdsRef.current.includes(node.id)
         const group = new THREE.Group()
         const sphere = new THREE.Mesh(
           new THREE.SphereGeometry(node.isCoreMemory ? 3.9 : 2.4, 24, 24),
@@ -195,6 +271,19 @@ export default function ConstellationPage() {
             blending: THREE.AdditiveBlending,
           })
         )
+        const pulse = new THREE.Mesh(
+          new THREE.SphereGeometry(node.isCoreMemory ? 13 : 8.5, 24, 24),
+          new THREE.MeshBasicMaterial({
+            color,
+            transparent: true,
+            opacity: isPulsing ? 0.28 : 0,
+            blending: THREE.AdditiveBlending,
+            depthWrite: false,
+          })
+        )
+        pulse.userData = { isPulse: isPulsing }
+        group.userData = { pulse }
+        group.add(pulse)
         group.add(glow)
         group.add(sphere)
         return group
@@ -231,6 +320,16 @@ export default function ConstellationPage() {
 
       graph.scene().rotation.y += delta * 0.055 * passiveDirectionRef.current
       graph.scene().rotation.x = Math.sin(elapsed * 0.32) * 0.025
+      graph.graphData().nodes.forEach((node) => {
+        const object = node.__threeObj
+        const pulse = object?.userData?.pulse
+
+        if (pulse?.userData?.isPulse) {
+          const scale = 1 + Math.sin(elapsed * 3.2) * 0.22
+          pulse.scale.setScalar(scale)
+          pulse.material.opacity = 0.16 + ((Math.sin(elapsed * 3.2) + 1) / 2) * 0.22
+        }
+      })
 
       graph.controls().update()
 
@@ -244,7 +343,6 @@ export default function ConstellationPage() {
       graph.controls().maxDistance = window.innerWidth < 768 ? 1050 : 910
       graph.width(window.innerWidth)
       graph.height(window.innerHeight)
-      graph.cameraPosition({ x: 0, y: 0, z: window.innerWidth < 768 ? 1050 : 500 }, { x: 0, y: 0, z: 0 }, 600)
     }
 
     handleResize()
@@ -291,6 +389,84 @@ export default function ConstellationPage() {
     pointerRef.current.active = false
   }
 
+  async function createAmbientPlayer() {
+    const audio = new Audio(AMBIENT_AUDIO_SRC)
+    const fadeDuration = 6
+    const maxVolume = 0.42
+    let fadeFrame = null
+    let loopFrame = null
+
+    audio.preload = 'auto'
+    audio.volume = 0
+
+    const fadeTo = (targetVolume, duration = fadeDuration, onComplete) => {
+      if (fadeFrame) cancelAnimationFrame(fadeFrame)
+      const startVolume = audio.volume
+      const startedAt = performance.now()
+
+      const tick = (time) => {
+        const progress = Math.min((time - startedAt) / (duration * 1000), 1)
+        audio.volume = startVolume + (targetVolume - startVolume) * progress
+
+        if (progress < 1) {
+          fadeFrame = requestAnimationFrame(tick)
+          return
+        }
+
+        fadeFrame = null
+        onComplete?.()
+      }
+
+      fadeFrame = requestAnimationFrame(tick)
+    }
+
+    const monitorLoop = () => {
+      if (audio.duration && audio.duration - audio.currentTime <= fadeDuration) {
+        fadeTo(0, fadeDuration, () => {
+          audio.currentTime = 0
+          audio.play().catch((error) => {
+            console.error('Kon achtergrondmuziek niet opnieuw starten:', error)
+          })
+          fadeTo(maxVolume, fadeDuration)
+        })
+      }
+
+      loopFrame = requestAnimationFrame(monitorLoop)
+    }
+
+    await audio.play()
+    fadeTo(maxVolume, 3.5)
+    loopFrame = requestAnimationFrame(monitorLoop)
+
+    return {
+      stop() {
+        if (loopFrame) cancelAnimationFrame(loopFrame)
+        fadeTo(0, 1.2, () => {
+          audio.pause()
+          audio.currentTime = 0
+        })
+      },
+    }
+  }
+
+  async function toggleSound() {
+    if (soundEnabled) {
+      audioRef.current?.stop()
+      audioRef.current = null
+      setSoundEnabled(false)
+      return
+    }
+
+    try {
+      audioRef.current = await createAmbientPlayer()
+      setSoundEnabled(true)
+    } catch (error) {
+      console.error('Kon achtergrondmuziek niet starten:', error)
+      audioRef.current = null
+      setSoundEnabled(false)
+    }
+  }
+
   return (
     <div
       className="relative min-h-screen overflow-hidden"
@@ -309,6 +485,15 @@ export default function ConstellationPage() {
         }}
       />
       <div ref={graphRef} className="absolute inset-0" />
+
+      <button
+        type="button"
+        onClick={toggleSound}
+        className="absolute right-5 top-5 z-20 flex items-center gap-2 rounded-full border border-purple-300/20 bg-black/35 px-4 py-2 text-xs uppercase tracking-[0.22em] text-white/75 shadow-2xl backdrop-blur-md transition hover:border-purple-200/40 hover:text-white"
+      >
+        {soundEnabled ? <Volume2 size={15} /> : <VolumeX size={15} />}
+        {soundEnabled ? 'Toon aan' : 'Toon uit'}
+      </button>
 
       <div className="pointer-events-none absolute left-6 top-6 z-10 max-w-sm">
         <motion.p
@@ -403,15 +588,19 @@ function MemoryOverlay({ memory, onClose, onPrevious, onNext }) {
         <h2 className="pr-10 text-3xl font-light leading-tight" style={{ color: 'var(--text-primary)' }}>
           {memory.title}
         </h2>
-        <p className="mt-2 text-sm" style={{ color: 'var(--text-muted)' }}>
-          Toegevoegd door {memory.author}
-        </p>
-
-        <div className="my-7 rounded-2xl border border-purple-200/10 bg-white/[0.03] p-6">
-          <p className={memory.type === 'quote' ? 'text-2xl font-light leading-relaxed' : 'text-sm leading-7'} style={{ color: 'var(--text-primary)' }}>
-            {memory.body}
+        {memory.author && (
+          <p className="mt-2 text-sm" style={{ color: 'var(--text-muted)' }}>
+            Toegevoegd door {memory.author}
           </p>
-        </div>
+        )}
+
+        {memory.body && (
+          <div className="my-7 rounded-2xl border border-purple-200/10 bg-white/[0.03] p-6">
+            <p className={memory.type === 'quote' ? 'text-2xl font-light leading-relaxed' : 'text-sm leading-7'} style={{ color: 'var(--text-primary)' }}>
+              {memory.body}
+            </p>
+          </div>
+        )}
 
         <div className="flex items-center justify-between gap-4">
           <button
