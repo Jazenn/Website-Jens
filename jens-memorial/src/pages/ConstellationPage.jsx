@@ -4,8 +4,8 @@ import ForceGraph3D from '3d-force-graph'
 import * as THREE from 'three'
 import { AnimatePresence, motion } from 'framer-motion'
 import { Heart, Music, PenLine, Shield, UserRound, Volume2, VolumeX, X } from 'lucide-react'
+import { useAmbientAudio } from '../context/AmbientAudioContext'
 
-const AMBIENT_AUDIO_SRC = '/audio/constellation-ambient.mp3'
 const CUSTOM_MEMORIES_KEY = 'jens-custom-memories'
 const PULSING_MEMORIES_KEY = 'jens-pulsing-memory-ids'
 const MEMORY_TYPES = ['foto', 'video', 'quote', 'tekst']
@@ -190,9 +190,8 @@ export default function ConstellationPage() {
   const animationFrameRef = useRef(null)
   const pointerRef = useRef({ active: false, x: 0 })
   const passiveDirectionRef = useRef(1)
-  const audioRef = useRef(null)
   const [selectedMemory, setSelectedMemory] = useState(null)
-  const [soundEnabled, setSoundEnabled] = useState(false)
+  const { enabled: soundEnabled, toggle: toggleSound } = useAmbientAudio()
   const [customMemories] = useState(() => {
     try {
       return JSON.parse(localStorage.getItem(CUSTOM_MEMORIES_KEY) ?? '[]')
@@ -214,15 +213,6 @@ export default function ConstellationPage() {
   useEffect(() => {
     pulsingMemoryIdsRef.current = pulsingMemoryIds
   }, [pulsingMemoryIds])
-
-  useEffect(() => {
-    return () => {
-      if (audioRef.current) {
-        audioRef.current.stop()
-        audioRef.current = null
-      }
-    }
-  }, [])
 
   useEffect(() => {
     if (!graphRef.current) return
@@ -387,84 +377,6 @@ export default function ConstellationPage() {
 
   function handlePointerUp() {
     pointerRef.current.active = false
-  }
-
-  async function createAmbientPlayer() {
-    const audio = new Audio(AMBIENT_AUDIO_SRC)
-    const fadeDuration = 6
-    const maxVolume = 0.42
-    let fadeFrame = null
-    let loopFrame = null
-
-    audio.preload = 'auto'
-    audio.volume = 0
-
-    const fadeTo = (targetVolume, duration = fadeDuration, onComplete) => {
-      if (fadeFrame) cancelAnimationFrame(fadeFrame)
-      const startVolume = audio.volume
-      const startedAt = performance.now()
-
-      const tick = (time) => {
-        const progress = Math.min((time - startedAt) / (duration * 1000), 1)
-        audio.volume = startVolume + (targetVolume - startVolume) * progress
-
-        if (progress < 1) {
-          fadeFrame = requestAnimationFrame(tick)
-          return
-        }
-
-        fadeFrame = null
-        onComplete?.()
-      }
-
-      fadeFrame = requestAnimationFrame(tick)
-    }
-
-    const monitorLoop = () => {
-      if (audio.duration && audio.duration - audio.currentTime <= fadeDuration) {
-        fadeTo(0, fadeDuration, () => {
-          audio.currentTime = 0
-          audio.play().catch((error) => {
-            console.error('Kon achtergrondmuziek niet opnieuw starten:', error)
-          })
-          fadeTo(maxVolume, fadeDuration)
-        })
-      }
-
-      loopFrame = requestAnimationFrame(monitorLoop)
-    }
-
-    await audio.play()
-    fadeTo(maxVolume, 3.5)
-    loopFrame = requestAnimationFrame(monitorLoop)
-
-    return {
-      stop() {
-        if (loopFrame) cancelAnimationFrame(loopFrame)
-        fadeTo(0, 1.2, () => {
-          audio.pause()
-          audio.currentTime = 0
-        })
-      },
-    }
-  }
-
-  async function toggleSound() {
-    if (soundEnabled) {
-      audioRef.current?.stop()
-      audioRef.current = null
-      setSoundEnabled(false)
-      return
-    }
-
-    try {
-      audioRef.current = await createAmbientPlayer()
-      setSoundEnabled(true)
-    } catch (error) {
-      console.error('Kon achtergrondmuziek niet starten:', error)
-      audioRef.current = null
-      setSoundEnabled(false)
-    }
   }
 
   return (
