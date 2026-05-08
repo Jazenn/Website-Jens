@@ -84,28 +84,66 @@ function createLinks(nodes) {
 
 function createStarField(count, radius, color, size, opacity) {
   const positions = new Float32Array(count * 3)
+  const colors = new Float32Array(count * 3)
+  const sizes = new Float32Array(count)
+  const baseColor = new THREE.Color(color)
 
   for (let index = 0; index < count; index += 1) {
     const phi = Math.acos(1 - (2 * (index + 0.5)) / count)
     const theta = index * Math.PI * (3 - Math.sqrt(5))
-    const drift = radius + Math.sin(index * 12.9898) * 90
+    const drift = radius + Math.sin(index * 12.9898) * 140 + Math.cos(index * 4.711) * 55
+    const warmth = 0.82 + ((Math.sin(index * 78.233) + 1) / 2) * 0.32
+    const scale =
+      index % 41 === 0
+        ? 3.1
+        : index % 17 === 0
+          ? 2.25
+          : 0.45 + ((Math.cos(index * 19.19) + 1) / 2) * 1.45
+    const starColor = baseColor.clone().multiplyScalar(warmth)
 
     positions[index * 3] = drift * Math.cos(theta) * Math.sin(phi)
     positions[index * 3 + 1] = drift * Math.sin(theta) * Math.sin(phi)
     positions[index * 3 + 2] = drift * Math.cos(phi)
+
+    colors[index * 3] = starColor.r
+    colors[index * 3 + 1] = starColor.g
+    colors[index * 3 + 2] = starColor.b
+    sizes[index] = size * scale
   }
 
   const geometry = new THREE.BufferGeometry()
   geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3))
+  geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3))
+  geometry.setAttribute('size', new THREE.BufferAttribute(sizes, 1))
 
-  const material = new THREE.PointsMaterial({
-    color,
-    size,
-    transparent: true,
-    opacity,
+  const material = new THREE.ShaderMaterial({
+    uniforms: {},
+    vertexColors: true,
+    transparent: false,
+    depthTest: false,
     depthWrite: false,
-    blending: THREE.AdditiveBlending,
-    sizeAttenuation: true,
+    blending: THREE.NormalBlending,
+    vertexShader: `
+      attribute float size;
+      varying vec3 vColor;
+
+      void main() {
+        vColor = color;
+        vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
+        gl_PointSize = size * (660.0 / -mvPosition.z);
+        gl_Position = projectionMatrix * mvPosition;
+      }
+    `,
+    fragmentShader: `
+      varying vec3 vColor;
+      void main() {
+        vec2 center = gl_PointCoord - vec2(0.5);
+        float dist = length(center);
+        if (dist > 0.5) discard;
+        float core = smoothstep(0.5, 0.22, dist);
+        gl_FragColor = vec4(vColor * (0.82 + core * 0.35), 1.0);
+      }
+    `,
   })
 
   return new THREE.Points(geometry, material)
@@ -115,6 +153,8 @@ export default function ConstellationPage() {
   const graphRef = useRef(null)
   const graphInstanceRef = useRef(null)
   const animationFrameRef = useRef(null)
+  const pointerRef = useRef({ active: false, x: 0 })
+  const passiveDirectionRef = useRef(1)
   const [selectedMemory, setSelectedMemory] = useState(null)
   const memories = useMemo(() => createMemories(), [])
   const graphData = useMemo(() => ({ nodes: memories, links: createLinks(memories) }), [memories])
@@ -176,7 +216,17 @@ export default function ConstellationPage() {
     universe.add(createStarField(42, 3000, '#f59e0b', 9.6, 0.44))
     graph.scene().add(universe)
 
-    const animateScene = () => {
+    let lastTime = performance.now()
+    let elapsed = 0
+
+    const animateScene = (time) => {
+      const delta = Math.min((time - lastTime) / 1000, 0.04)
+      lastTime = time
+      elapsed += delta
+
+      graph.scene().rotation.y += delta * 0.055 * passiveDirectionRef.current
+      graph.scene().rotation.x = Math.sin(elapsed * 0.32) * 0.025
+
       graph.controls().update()
 
       animationFrameRef.current = requestAnimationFrame(animateScene)
@@ -215,10 +265,36 @@ export default function ConstellationPage() {
     setSelectedMemory(memories[nextIndex])
   }
 
+  function handlePointerDown(event) {
+    pointerRef.current = { active: true, x: event.clientX }
+  }
+
+  function handlePointerMove(event) {
+    if (!pointerRef.current.active || !graphInstanceRef.current) return
+
+    const deltaX = event.clientX - pointerRef.current.x
+    pointerRef.current.x = event.clientX
+
+    if (Math.abs(deltaX) > 1.5) {
+      const direction = deltaX > 0 ? 1 : -1
+      passiveDirectionRef.current = direction
+      graphInstanceRef.current.controls().autoRotateSpeed = 0.32 * direction
+    }
+  }
+
+  function handlePointerUp() {
+    pointerRef.current.active = false
+  }
+
   return (
     <div
       className="relative min-h-screen overflow-hidden"
       style={{ background: 'var(--cosmic-bg)' }}
+      onPointerDown={handlePointerDown}
+      onPointerMove={handlePointerMove}
+      onPointerUp={handlePointerUp}
+      onPointerCancel={handlePointerUp}
+      onPointerLeave={handlePointerUp}
     >
       <div
         className="absolute inset-0 pointer-events-none"
