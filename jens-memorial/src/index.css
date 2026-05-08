@@ -1,0 +1,77 @@
+@import "tailwindcss";
+
+:root {
+  --cosmic-bg: #05030f;
+  --cosmic-deep: #0a0618;
+  --cosmic-purple: #2d1b69;
+  --accent-purple: #7c3aed;
+  --accent-lilac: #a78bfa;
+  --accent-gold: #f59e0b;
+  --text-primary: #f3f0ff;
+  --text-muted: #9d8ec7;
+}
+
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+html, body {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  height: 100%;
+  background: var(--cosmic-bg);
+  color: var(--text-primary);
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  overflow-x: hidden;
+}
+
+#root {
+  width: 100%;
+  min-height: 100vh;
+}
+
+@keyframes pulse-star {
+  0%, 100% { opacity: 0.4; transform: scale(1); }
+  50% { opacity: 1; transform: scale(1.3); }
+}
+
+@keyframes nebula-drift {
+  0%, 100% { transform: translate(0, 0) scale(1); opacity: 0.15; }
+  33% { transform: translate(30px, -20px) scale(1.05); opacity: 0.25; }
+  66% { transform: translate(-20px, 15px) scale(0.97); opacity: 0.18; }
+}
+
+@keyframes fade-in-up {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes hyperspace {
+  0% { transform: scale(1); opacity: 1; filter: blur(0px); }
+  100% { transform: scale(8); opacity: 0; filter: blur(12px); }
+}
+
+@keyframes cosmic-twinkle {
+  0%, 100% { transform: scale(0.75); filter: blur(0px); }
+  45% { transform: scale(1.35); filter: blur(0.2px); }
+  70% { transform: scale(0.95); filter: blur(0px); }
+}
+
+.animate-fade-in-up {
+  animation: fade-in-up 1s ease forwards;
+}
+
+.animate-nebula {
+  animation: nebula-drift 20s ease-in-out infinite;
+}
+
+.animate-hyperspace {
+  animation: hyperspace 1.2s ease-in forwards;
+}
+
+.animate-cosmic-twinkle {
+  animation: cosmic-twinkle 4s ease-in-out infinite;
+}

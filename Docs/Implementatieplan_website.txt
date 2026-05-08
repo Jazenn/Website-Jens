@@ -1,0 +1,86 @@
+🌌 Project "Jens" — Uitgebreid Projectplan
+De Kernervaring
+Een privé webapplicatie die aanvoelt als een kosmisch monument. Het hart is een roterende 3D-constellatie-bol — honderden lichtpuntjes verbonden met lijnen, elk puntje een herinnering aan Jens. Donker, paars-kosmisch, met een zacht atmosferisch achtergrondgeluid. Je kunt er alleen stil in zitten, of samen met vrienden door scrollen en herinneringen openen.
+
+Onderdelen van de Site
+1. 🔐 Entree / Loginscherm
+De eerste indruk telt. Dit is geen saai loginformulier — dit is de poort naar zijn wereld.
+
+Volledig zwart scherm, langzaam verschijnt er een subtiele nevel van paarse sterrenstof
+Zijn naam verschijnt stil in het midden, met zijn geboorte- en sterfdatum
+Eronder een simpel wachtwoordveld — geen uitleg, geen menu, gewoon stilte
+Na invoer: de camera "vliegt" de constellatie in als een soort hyperspace-animatie
+
+
+2. 🌐 De Constellatie (Hoofdpagina)
+Het kloppende hart van de site.
+
+Een interactieve 3D-bol van lichtpuntjes, verbonden met dunne glanzende lijnen — als een neurale kaart of sterrenstelsel
+De puntjes ademen zachtjes (subtiele pulse-animatie) en glinsteren
+Kleur: diep paars, lichtpaars, wit — met af en toe een warmer goudkleurig puntje voor speciale herinneringen
+Swipen om de bol te draaien (muis op desktop, touch op mobiel)
+Hover over een puntje: de naam van de herinnering of datum verschijnt zacht
+Klikken op een puntje: opent de herinnering in een overlay
+Puntjes zijn subtiel gegroepeerd — foto's zitten meer bij elkaar, quotes elders, etc. — maar dit is niet rigide
+Een zachte kosmische drone/hum speelt op de achtergrond (denk aan de EV-achteruit-toon, maar muzikaler — een soort Interstellar-achtig laag geluid)
+
+
+3. 📸 Herinnering-overlay
+Als je op een puntje klikt, opent er een elegante overlay die de rest dimt.
+Afhankelijk van het type herinnering:
+TypeWeergaveFotoFoto groot weergegeven, naam van de uploader, datum, optioneel een korte beschrijvingQuoteGrote typografie op een donkere achtergrond, naam van degene die 'm heeft toegevoegdVideoEmbedded videospeler, autoplay gedemptBericht van vriendTekst + naam + datum, als een soort brief
+
+Sluiten via een subtiele ✕ of door buiten de overlay te klikken
+Pijltjes om naar de volgende/vorige herinnering te navigeren
+Elk moment heeft een kleine "kaars" of hartje die je aan kunt klikken — een stille erkenning, geen publieke teller
+
+
+4. ✍️ Herinnering Toevoegen (voor vrienden)
+Een aparte, rustige pagina waar vrienden content kunnen inzenden.
+
+Vrienden kiezen een type (foto, quote, video, bericht)
+Voegen hun naam toe en eventueel een korte context
+Submitten → komt eerst bij jou als moderator voordat het zichtbaar is in de constellatie
+Jij krijgt een e-mailmelding + een simpel admin-paneel waar je content goedkeurt of afwijst
+Zo blijft de kwaliteit en integriteit van de site in jouw handen
+
+
+5. 🎵 Zijn Muziek — "De Soundtrack"
+Een aparte sectie, bewust los van de constellatie, voor zijn muziek.
+
+Een soort "afspeellijst" pagina met de nummers die bij hem hoorden
+Per nummer: albumart, artiestinfo, en eventueel een quote van wie dit nummer heeft toegevoegd en waarom
+Denk aan: Spotify embeds of YouTube embeds per track
+Sfeer: iets energieker, dit is zijn energie — hier past DnB juist wél
+Mogelijk een visualizer-achtige animatie die mee beweegt op het ritme
+
+
+6. 📖 "Over Jens" — Intro/Biografie
+Een optionele korte pagina als introductie voor mensen die misschien minder close waren.
+
+Zijn naam, een mooie foto
+Een korte tekst over wie hij was, wat hij betekende
+Niet als Wikipedia-artikel, maar als een liefdevol portret
+
+
+Technische Stack
+OnderdeelToolWaaromFrontendReact + ViteSnel, modulair, jij kent dit3D Constellatiethree.js + 3d-force-graphPrecies wat je beschreef: 3D sphere met nodes & lijnen, volledig interactiefStylingTailwind CSSSnel custom dark-theme bouwenDatabase & AuthSupabaseGratis tier, PostgreSQL, ingebouwde bestandsopslag, eenvoudigBestandsopslagSupabase StorageFoto's en video's opslaanHostingVercelGratis, instant deploy via GitHubGeluidenHowler.jsAmbient sound loop beherenAnimatiesFramer MotionVloeiende overlay-transities
+Alles gratis op de tier die je nodig hebt. Geen kosten behalve eventueel een domeinnaam (~€10/jaar).
+
+Bouwen in Fases
+Fase 1 — Fundament (±1-2 weken)
+Vercel + Supabase opzetten, loginscherm, basis routing, paars-kosmisch design systeem
+Fase 2 — De Constellatie (±2-3 weken)
+3D-bol werkend krijgen, nodes laden vanuit database, rotatie/hover/klik, ambient sound
+Fase 3 — Content & Overlays (±1-2 weken)
+Herinnering-overlay bouwen per type, foto/video/quote weergave
+Fase 4 — Bijdragen & Moderatie (±1 week)
+Upload-formulier voor vrienden, e-mailnotificatie, admin-goedkeuringsscherm
+Fase 5 — Muziekpagina & Finishing (±1 week)
+Soundtrack sectie, "Over Jens" pagina, mobiel fijntunen, testen met vrienden
+
+Domeinnaam
+Iets als voorjens.nl of jens-forever.nl — simpel, persoonlijk, makkelijk te delen in een WhatsApp-groep. Registreren via TransIP of Namecheap (~€10/jaar).
+
+Dit is technisch goed haalbaar voor jou — de moeilijkste maar mooiste stap is de 3D-constellatie, maar 3d-force-graph doet veel van het zware werk. De rest is eigenlijk gewoon een goed gebouwde React-app met een mooie dark theme.
+Wil je meteen beginnen met een van de fases? Ik stel voor om te starten met een werkend prototype van de constellatie zelf — dat is het hart, en als dat voelt zoals je het voor ogen hebt, valt de rest op zijn plek.
