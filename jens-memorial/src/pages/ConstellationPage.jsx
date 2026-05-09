@@ -8,6 +8,7 @@ import { useAmbientAudio } from '../context/AmbientAudioContext'
 
 const CUSTOM_MEMORIES_KEY = 'jens-custom-memories'
 const PULSING_MEMORIES_KEY = 'jens-pulsing-memory-ids'
+const LIT_CANDLES_KEY = 'jens-lit-candle-memory-ids'
 const MEMORY_TYPES = ['foto', 'video', 'quote', 'tekst']
 const MEMORY_TYPE_COLORS = {
   foto: '#ffffff',
@@ -192,6 +193,13 @@ export default function ConstellationPage() {
   const passiveDirectionRef = useRef(1)
   const [selectedMemory, setSelectedMemory] = useState(null)
   const { enabled: soundEnabled, toggle: toggleSound } = useAmbientAudio()
+  const [litCandleIds, setLitCandleIds] = useState(() => {
+    try {
+      return JSON.parse(localStorage.getItem(LIT_CANDLES_KEY) ?? '[]')
+    } catch {
+      return []
+    }
+  })
   const [customMemories] = useState(() => {
     try {
       return JSON.parse(localStorage.getItem(CUSTOM_MEMORIES_KEY) ?? '[]')
@@ -358,6 +366,17 @@ export default function ConstellationPage() {
     setSelectedMemory(memories[nextIndex])
   }
 
+  function toggleCandle(memoryId) {
+    setLitCandleIds((currentIds) => {
+      const nextIds = currentIds.includes(memoryId)
+        ? currentIds.filter((id) => id !== memoryId)
+        : [...currentIds, memoryId]
+
+      localStorage.setItem(LIT_CANDLES_KEY, JSON.stringify(nextIds))
+      return nextIds
+    })
+  }
+
   function handlePointerDown(event) {
     pointerRef.current = { active: true, x: event.clientX }
   }
@@ -447,6 +466,8 @@ export default function ConstellationPage() {
         {selectedMemory && (
           <MemoryOverlay
             memory={selectedMemory}
+            candleLit={litCandleIds.includes(selectedMemory.id)}
+            onToggleCandle={() => toggleCandle(selectedMemory.id)}
             onClose={() => setSelectedMemory(null)}
             onPrevious={() => goToMemory(-1)}
             onNext={() => goToMemory(1)}
@@ -470,7 +491,7 @@ function NavItem({ to, label, icon }) {
   )
 }
 
-function MemoryOverlay({ memory, onClose, onPrevious, onNext }) {
+function MemoryOverlay({ memory, candleLit, onToggleCandle, onClose, onPrevious, onNext }) {
   return (
     <motion.div
       className="fixed inset-0 z-30 flex items-center justify-center bg-black/65 px-5 backdrop-blur-sm"
@@ -517,10 +538,13 @@ function MemoryOverlay({ memory, onClose, onPrevious, onNext }) {
         <div className="flex items-center justify-between gap-4">
           <button
             type="button"
-            className="flex items-center gap-2 rounded-full border border-purple-200/15 px-4 py-2 text-xs transition hover:bg-white/10"
-            style={{ color: 'var(--text-muted)' }}
+            onClick={onToggleCandle}
+            className={`flex items-center gap-2 rounded-full border px-4 py-2 text-xs transition ${
+              candleLit ? 'border-rose-200/35 bg-rose-300/12 text-rose-100' : 'border-purple-200/15 hover:bg-white/10'
+            }`}
+            style={{ color: candleLit ? '#fecdd3' : 'var(--text-muted)' }}
           >
-            <Heart size={15} />
+            <Heart size={15} fill={candleLit ? 'currentColor' : 'none'} />
             Kaarsje
           </button>
 
