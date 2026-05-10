@@ -5,6 +5,9 @@ import * as THREE from 'three'
 import { AnimatePresence, motion } from 'framer-motion'
 import { Heart, Music, PenLine, Shield, UserRound, Volume2, VolumeX, X } from 'lucide-react'
 import { useAmbientAudio } from '../context/AmbientAudioContext'
+import { useAuth } from '../context/AuthContext'
+import { useMusicPlayer } from '../context/MusicPlayerContext'
+import { CORE_MEMORY_CANDLE_THRESHOLD, fetchMemories, fetchUserCandleIds, lightCandle, removeCandle } from '../lib/memories'
 
 const CUSTOM_MEMORIES_KEY = 'jens-custom-memories'
 const PULSING_MEMORIES_KEY = 'jens-pulsing-memory-ids'
@@ -17,20 +20,6 @@ const MEMORY_TYPE_COLORS = {
   tekst: '#7dd3fc',
 }
 const CORE_MEMORY_COLOR = '#f59e0b'
-const MEMORY_TITLES = [
-  'Een avond die bleef hangen',
-  'Zijn lach in de kamer',
-  'De rit naar huis',
-  'Altijd nog één nummer',
-  'Een stille grap',
-  'Zomerlicht',
-  'De plek aan tafel',
-  'Iets wat hij zei',
-  'Nachtelijke gesprekken',
-  'Gouden moment',
-  'Samen onderweg',
-  'Een herinnering zonder woorden',
-]
 
 function getMemoryPosition(index, total) {
   const cluster = index % 4
@@ -45,41 +34,11 @@ function getMemoryPosition(index, total) {
   }
 }
 
-function createMemories() {
-  return Array.from({ length: 96 }, (_, index) => {
-    const type = MEMORY_TYPES[(index * 7 + Math.floor(index / 5)) % MEMORY_TYPES.length]
-    const special = index % 13 === 0
-    const { x, y, z } = getMemoryPosition(index, 96)
-
-    return {
-      id: `memory-${index}`,
-      title: MEMORY_TITLES[index % MEMORY_TITLES.length],
-      type,
-      author: ['Griffin', 'Een vriend', 'Familie', 'Iemand die hem mist'][index % 4],
-      date: `${String((index % 28) + 1).padStart(2, '0')}-06-2025`,
-      special,
-      candleCount: index % 13 === 0 ? 4 + (index % 5) : index % 4,
-      isCoreMemory: index % 13 === 0,
-      x,
-      y,
-      z,
-      fx: x,
-      fy: y,
-      fz: z,
-      body:
-        type === 'quote'
-          ? '“Sommige mensen laten licht achter, zelfs als ze er niet meer zijn.”'
-          : 'Een plek voor een persoonlijke herinnering aan Jens. Later komt hier de echte tekst, foto of video die iemand heeft toegevoegd.',
-    }
-  })
-}
-
 function createCustomMemories(savedMemories) {
-  const total = 96 + savedMemories.length
+  const total = Math.max(savedMemories.length, 1)
 
   return savedMemories.map((memory, customIndex) => {
-    const index = 96 + customIndex
-    const { x, y, z } = getMemoryPosition(index, total)
+    const { x, y, z } = getMemoryPosition(customIndex, total)
 
     return {
       ...memory,
@@ -193,6 +152,10 @@ export default function ConstellationPage() {
   const passiveDirectionRef = useRef(1)
   const [selectedMemory, setSelectedMemory] = useState(null)
   const { enabled: soundEnabled, toggle: toggleSound } = useAmbientAudio()
+  const { currentTrack, isPlaying, levels, toggle: toggleMusic } = useMusicPlayer()
+  const { user } = useAuth()
+  const [remoteMemories, setRemoteMemories] = useState([])
+  const [loadingMemories, setLoadingMemories] = useState(true)
   const [litCandleIds, setLitCandleIds] = useState(() => {
     try {
       return JSON.parse(localStorage.getItem(LIT_CANDLES_KEY) ?? '[]')
@@ -215,12 +178,41 @@ export default function ConstellationPage() {
     }
   })
   const pulsingMemoryIdsRef = useRef(pulsingMemoryIds)
-  const memories = useMemo(() => [...createMemories(), ...createCustomMemories(customMemories)], [customMemories])
+  const memories = useMemo(() => createCustomMemories([...customMemories, ...remoteMemories]), [customMemories, remoteMemories])
   const graphData = useMemo(() => ({ nodes: memories, links: createLinks(memories) }), [memories])
 
   useEffect(() => {
     pulsingMemoryIdsRef.current = pulsingMemoryIds
   }, [pulsingMemoryIds])
+
+  useEffect(() => {
+    if (!user?.id) {
+      setLoadingMemories(false)
+      return
+    }
+
+    let cancelled = false
+
+    async function loadRemoteData() {
+      try {
+        setLoadingMemories(true)
+        const [loadedMemories, loadedCandleIds] = await Promise.all([fetchMemories(), fetchUserCandleIds(user.id)])
+        if (cancelled) return
+        setRemoteMemories(loadedMemories)
+        setLitCandleIds(loadedCandleIds)
+      } catch (error) {
+        console.error('Kon herinneringen niet laden uit Supabase:', error)
+      } finally {
+        if (!cancelled) setLoadingMemories(false)
+      }
+    }
+
+    loadRemoteData()
+
+    return () => {
+      cancelled = true
+    }
+  }, [user?.id])
 
   useEffect(() => {
     if (!graphRef.current) return
@@ -366,7 +358,21 @@ export default function ConstellationPage() {
     setSelectedMemory(memories[nextIndex])
   }
 
-  function toggleCandle(memoryId) {
+  async function toggleCandle(memoryId) {
+    const candleWasLit = litCandleIds.includes(memoryId)
+    const candleDelta = candleWasLit ? -1 : 1
+
+    const updateMemoryCandleCount = (memory) => {
+      if (memory.id !== memoryId) return memory
+
+      const candleCount = Math.max((memory.candleCount ?? 0) + candleDelta, 0)
+      return {
+        ...memory,
+        candleCount,
+        isCoreMemory: memory.isPinnedCoreMemory || candleCount >= CORE_MEMORY_CANDLE_THRESHOLD,
+      }
+    }
+
     setLitCandleIds((currentIds) => {
       const nextIds = currentIds.includes(memoryId)
         ? currentIds.filter((id) => id !== memoryId)
@@ -375,6 +381,42 @@ export default function ConstellationPage() {
       localStorage.setItem(LIT_CANDLES_KEY, JSON.stringify(nextIds))
       return nextIds
     })
+    setRemoteMemories((currentMemories) => currentMemories.map(updateMemoryCandleCount))
+    setSelectedMemory((currentMemory) => (currentMemory?.id === memoryId ? updateMemoryCandleCount(currentMemory) : currentMemory))
+
+    if (!user?.id) return
+
+    try {
+      if (candleWasLit) await removeCandle(memoryId, user.id)
+      else await lightCandle(memoryId, user.id)
+    } catch (error) {
+      console.error('Kon kaarsje niet opslaan:', {
+        message: error.message,
+        code: error.code,
+        details: error.details,
+        hint: error.hint,
+      })
+      setLitCandleIds((currentIds) => {
+        const rollbackIds = candleWasLit
+          ? [...new Set([...currentIds, memoryId])]
+          : currentIds.filter((id) => id !== memoryId)
+
+        localStorage.setItem(LIT_CANDLES_KEY, JSON.stringify(rollbackIds))
+        return rollbackIds
+      })
+      setRemoteMemories((currentMemories) =>
+        currentMemories.map((memory) => {
+          if (memory.id !== memoryId) return memory
+
+          const candleCount = Math.max((memory.candleCount ?? 0) - candleDelta, 0)
+          return {
+            ...memory,
+            candleCount,
+            isCoreMemory: memory.isPinnedCoreMemory || candleCount >= CORE_MEMORY_CANDLE_THRESHOLD,
+          }
+        })
+      )
+    }
   }
 
   function handlePointerDown(event) {
@@ -455,12 +497,74 @@ export default function ConstellationPage() {
         </motion.p>
       </div>
 
+      {loadingMemories && memories.length === 0 && (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          className="absolute left-1/2 top-1/2 z-10 flex -translate-x-1/2 -translate-y-1/2 flex-col items-center gap-4 text-center"
+        >
+          <div className="h-2 w-2 rounded-full bg-purple-300 shadow-[0_0_28px_rgba(196,181,253,0.8)] animate-ping" />
+          <p className="text-xs uppercase tracking-[0.32em] text-white/35">Constellatie laden</p>
+        </motion.div>
+      )}
+
+      {!loadingMemories && memories.length === 0 && (
+        <motion.div
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="absolute left-1/2 top-1/2 z-10 w-[min(90vw,28rem)] -translate-x-1/2 -translate-y-1/2 rounded-3xl border border-purple-200/15 bg-black/35 p-7 text-center shadow-2xl backdrop-blur-md"
+        >
+          <p className="text-xs uppercase tracking-[0.32em] text-white/40">Nog geen sterren</p>
+          <h2 className="mt-3 text-2xl font-light tracking-[0.12em] text-white">Begin de constellatie</h2>
+          <p className="mt-4 text-sm leading-7 text-white/55">
+            Voeg de eerste foto, video, quote of herinnering toe om Jens zijn constellatie te vullen.
+          </p>
+          <Link
+            to="/add"
+            className="mt-6 inline-flex items-center gap-2 rounded-full bg-white px-5 py-3 text-sm font-medium text-black transition hover:bg-purple-100"
+          >
+            <PenLine size={16} />
+            Eerste herinnering toevoegen
+          </Link>
+        </motion.div>
+      )}
+
       <nav className="absolute bottom-5 left-1/2 z-20 flex -translate-x-1/2 items-center gap-2 rounded-full border border-purple-300/15 bg-black/30 px-3 py-2 shadow-2xl backdrop-blur-md">
         <NavItem to="/add" label="Toevoegen" icon={<PenLine size={16} />} />
         <NavItem to="/music" label="Muziek" icon={<Music size={16} />} />
         <NavItem to="/about" label="Over" icon={<UserRound size={16} />} />
         <NavItem to="/admin" label="Admin" icon={<Shield size={16} />} />
       </nav>
+
+      {currentTrack && (
+        <div className="absolute bottom-24 right-5 z-20 w-[min(22rem,calc(100vw-2.5rem))] rounded-3xl border border-purple-200/15 bg-black/35 p-4 shadow-2xl backdrop-blur-md">
+          <div className="flex items-center gap-4">
+            <button
+              type="button"
+              onClick={toggleMusic}
+              disabled={currentTrack.sourceType !== 'audio'}
+              className="flex h-11 w-11 items-center justify-center rounded-full border border-white/10 bg-white/5 text-white/75 transition hover:bg-white/10 disabled:opacity-40"
+            >
+              {isPlaying ? <Volume2 size={17} /> : <Music size={17} />}
+            </button>
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-sm text-white">{currentTrack.title}</p>
+              <p className="truncate text-xs text-white/40">
+                {currentTrack.artist || (currentTrack.sourceType === 'audio' ? 'Audio speelt door' : 'Link geselecteerd op muziekpagina')}
+              </p>
+              <div className="mt-2 flex h-5 items-end gap-0.5">
+                {levels.slice(0, 14).map((level, index) => (
+                  <span
+                    key={index}
+                    className="w-1 rounded-full bg-purple-200"
+                    style={{ height: `${Math.max(level * 100, 15)}%`, opacity: 0.35 + level * 0.65 }}
+                  />
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       <AnimatePresence>
         {selectedMemory && (
@@ -527,6 +631,16 @@ function MemoryOverlay({ memory, candleLit, onToggleCandle, onClose, onPrevious,
           </p>
         )}
 
+        {memory.mediaUrl && (
+          <div className="mt-6 overflow-hidden rounded-2xl border border-purple-200/10 bg-black/25">
+            {memory.mediaResourceType === 'video' || memory.type === 'video' ? (
+              <video src={memory.mediaUrl} poster={memory.mediaThumbnailUrl || undefined} className="max-h-[52vh] w-full object-contain" controls />
+            ) : (
+              <img src={memory.mediaUrl} alt={memory.title} className="max-h-[52vh] w-full object-contain" />
+            )}
+          </div>
+        )}
+
         {memory.body && (
           <div className="my-7 rounded-2xl border border-purple-200/10 bg-white/[0.03] p-6">
             <p className={memory.type === 'quote' ? 'text-2xl font-light leading-relaxed' : 'text-sm leading-7'} style={{ color: 'var(--text-primary)' }}>
@@ -538,7 +652,11 @@ function MemoryOverlay({ memory, candleLit, onToggleCandle, onClose, onPrevious,
         <div className="flex items-center justify-between gap-4">
           <button
             type="button"
-            onClick={onToggleCandle}
+            onClick={(event) => {
+              event.preventDefault()
+              event.stopPropagation()
+              onToggleCandle()
+            }}
             className={`flex items-center gap-2 rounded-full border px-4 py-2 text-xs transition ${
               candleLit ? 'border-rose-200/35 bg-rose-300/12 text-rose-100' : 'border-purple-200/15 hover:bg-white/10'
             }`}

@@ -1,7 +1,8 @@
 import { Navigate } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext'
+import { JOURNEY_STARTED_KEY } from '../../lib/journey'
 
-export function ProtectedRoute({ children, adminOnly = false }) {
+export function ProtectedRoute({ children, adminOnly = false, skipJourneyIntro = false }) {
   const { user, isApproved, isAdmin, loading } = useAuth()
 
   if (loading) {
@@ -17,6 +18,7 @@ export function ProtectedRoute({ children, adminOnly = false }) {
 
   if (!user) return <Navigate to="/login" replace />
   if (user && !isApproved) return <Navigate to="/waiting" replace />
+  if (!skipJourneyIntro && sessionStorage.getItem(JOURNEY_STARTED_KEY) !== 'true') return <Navigate to="/intro" replace />
   if (adminOnly && !isAdmin) return <Navigate to="/" replace />
 
   return children

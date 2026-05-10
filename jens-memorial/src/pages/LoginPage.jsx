@@ -23,7 +23,7 @@ export default function LoginPage() {
   const [showEmailForm, setShowEmailForm] = useState(false)
 
   useEffect(() => {
-    if (user && isApproved) navigate('/', { replace: true })
+    if (user && isApproved) navigate('/intro', { replace: true })
   }, [user, isApproved, navigate])
 
   async function handleGoogleLogin() {

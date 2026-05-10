@@ -7,13 +7,24 @@ import AddMemoryPage from './pages/AddMemoryPage'
 import MusicPage from './pages/MusicPage'
 import AboutPage from './pages/AboutPage'
 import AdminPage from './pages/AdminPage'
+import JourneyIntroPage from './pages/JourneyIntroPage'
 import { AmbientAudioProvider } from './context/AmbientAudioContext'
+import { MusicPlayerProvider } from './context/MusicPlayerContext'
 
 function App() {
   return (
     <AmbientAudioProvider>
-      <Routes>
+      <MusicPlayerProvider>
+        <Routes>
         <Route path="/login" element={<LoginPage />} />
+        <Route
+          path="/intro"
+          element={
+            <ProtectedRoute skipJourneyIntro>
+              <JourneyIntroPage />
+            </ProtectedRoute>
+          }
+        />
         <Route path="/waiting" element={<WaitingPage />} />
         <Route
           path="/"
@@ -56,7 +67,8 @@ function App() {
           }
         />
         <Route path="*" element={<Navigate to="/" replace />} />
-      </Routes>
+        </Routes>
+      </MusicPlayerProvider>
     </AmbientAudioProvider>
   )
 }

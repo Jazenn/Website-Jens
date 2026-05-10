@@ -1,7 +1,6 @@
 import { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react'
 
 const AMBIENT_AUDIO_SRC = '/audio/Space Ambient  Music ★ Pure Cosmic Relaxation ★ Mind Relaxation [gCWaRhNUvfc].mp3'
-const AMBIENT_AUDIO_MUTED_KEY = 'jens-ambient-audio-muted'
 const AmbientAudioContext = createContext(null)
 
 function createAmbientPlayer() {
@@ -36,7 +35,7 @@ function createAmbientPlayer() {
     fadeFrame = requestAnimationFrame(tick)
   }
 
-  const play = async (fadeSeconds = 3.5) => {
+  const play = async (fadeSeconds = 2.2) => {
     manuallyStopped = false
     await audio.play()
     fadeTo(maxVolume, fadeSeconds)
@@ -61,10 +60,10 @@ function createAmbientPlayer() {
   return {
     play,
     duck() {
-      fadeTo(0, 1.8)
+      fadeTo(0, 4)
     },
     unduck() {
-      if (!manuallyStopped && !audio.paused) fadeTo(maxVolume, 2.4)
+      if (!manuallyStopped && !audio.paused) fadeTo(maxVolume, 4)
     },
     stop(reset = false) {
       manuallyStopped = true
@@ -83,8 +82,8 @@ function createAmbientPlayer() {
 }
 
 export function AmbientAudioProvider({ children }) {
-  const playerRef = useRef(null)
-  const [enabled, setEnabled] = useState(() => localStorage.getItem(AMBIENT_AUDIO_MUTED_KEY) !== 'true')
+  const [enabled, setEnabled] = useState(true)
+  const playerRef = useRef(createAmbientPlayer())
   const [blocked, setBlocked] = useState(false)
 
   const start = async () => {
@@ -103,22 +102,32 @@ export function AmbientAudioProvider({ children }) {
     playerRef.current?.stop()
   }
 
+  const duck = () => {
+    playerRef.current?.duck()
+  }
+
+  const unduck = () => {
+    if (enabled) playerRef.current?.unduck()
+  }
+
   const toggle = async () => {
     if (enabled) {
-      localStorage.setItem(AMBIENT_AUDIO_MUTED_KEY, 'true')
       setEnabled(false)
       stop()
       return
     }
 
-    localStorage.setItem(AMBIENT_AUDIO_MUTED_KEY, 'false')
     setEnabled(true)
     await start()
   }
 
   useEffect(() => {
-    if (enabled) start()
-    else stop()
+    if (!enabled) {
+      stop()
+      return
+    }
+
+    start()
   }, [enabled])
 
   useEffect(() => {
@@ -168,7 +177,7 @@ export function AmbientAudioProvider({ children }) {
     }
   }, [])
 
-  const value = useMemo(() => ({ enabled, blocked, toggle, start }), [enabled, blocked])
+  const value = useMemo(() => ({ enabled, blocked, toggle, start, duck, unduck }), [enabled, blocked])
 
   return <AmbientAudioContext.Provider value={value}>{children}</AmbientAudioContext.Provider>
 }

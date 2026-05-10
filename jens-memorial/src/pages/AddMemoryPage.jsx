@@ -2,6 +2,9 @@ import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { ArrowLeft, FileText, Image, Quote, Send, Upload, Video, X } from 'lucide-react'
 import { motion } from 'framer-motion'
+import { useAuth } from '../context/AuthContext'
+import { MEDIA_LIMITS, uploadMediaToCloudinary, validateMediaFile } from '../lib/cloudinary'
+import { createMemory } from '../lib/memories'
 
 const MEMORY_TYPES = [
   { id: 'foto', label: 'Foto', description: 'Een beeld van een moment, plek of herinnering.', icon: Image, color: '#ffffff', accept: 'image/*' },
@@ -14,12 +17,15 @@ const PULSING_MEMORIES_KEY = 'jens-pulsing-memory-ids'
 
 export default function AddMemoryPage() {
   const navigate = useNavigate()
+  const { user } = useAuth()
   const [type, setType] = useState('foto')
   const [title, setTitle] = useState('')
   const [author, setAuthor] = useState('')
   const [body, setBody] = useState('')
   const [file, setFile] = useState(null)
   const [submitted, setSubmitted] = useState(false)
+  const [error, setError] = useState('')
+  const [uploading, setUploading] = useState(false)
 
   const selectedType = useMemo(() => MEMORY_TYPES.find((memoryType) => memoryType.id === type), [type])
   const previewUrl = useMemo(() => (file ? URL.createObjectURL(file) : null), [file])
@@ -31,35 +37,91 @@ export default function AddMemoryPage() {
     }
   }, [previewUrl])
 
-  function handleSubmit(event) {
+  async function handleSubmit(event) {
     event.preventDefault()
+    setError('')
     if (type === 'tekst' && !body.trim()) return
-
-    const fallbackTitle = type === 'foto' ? 'Herinnerings foto' : type === 'video' ? 'Herinnerings video' : type === 'quote' ? 'Herinnerings quote' : 'Herinnering'
-    const memory = {
-      id: `custom-${Date.now()}`,
-      type,
-      title: title.trim() || fallbackTitle,
-      author: author.trim(),
-      body: body.trim(),
-      date: new Date().toLocaleDateString('nl-NL', { day: '2-digit', month: '2-digit', year: 'numeric' }),
-      fileName: file?.name ?? '',
-      candleCount: 0,
-      isCoreMemory: false,
-      isCustom: true,
+    if (needsFile && !file) {
+      setError('Kies eerst een bestand voor deze herinnering.')
+      return
     }
-    const existingMemories = JSON.parse(localStorage.getItem(CUSTOM_MEMORIES_KEY) ?? '[]')
-    const existingPulseIds = JSON.parse(localStorage.getItem(PULSING_MEMORIES_KEY) ?? '[]')
-    localStorage.setItem(CUSTOM_MEMORIES_KEY, JSON.stringify([...existingMemories, memory]))
-    localStorage.setItem(PULSING_MEMORIES_KEY, JSON.stringify([...new Set([...existingPulseIds, memory.id])]))
-    setSubmitted(true)
-    navigate('/')
+
+    let media = null
+
+    if (needsFile) {
+      const validation = validateMediaFile(file, type)
+      if (!validation.valid) {
+        setError(validation.message)
+        return
+      }
+    }
+
+    try {
+      setUploading(true)
+
+      if (needsFile) {
+        media = await uploadMediaToCloudinary(file, type)
+      }
+
+      const fallbackTitle = type === 'foto' ? 'Herinnerings foto' : type === 'video' ? 'Herinnerings video' : type === 'quote' ? 'Herinnerings quote' : 'Herinnering'
+      const memory = {
+        id: `custom-${Date.now()}`,
+        type,
+        title: title.trim() || fallbackTitle,
+        author: author.trim(),
+        body: body.trim(),
+        date: new Date().toLocaleDateString('nl-NL', { day: '2-digit', month: '2-digit', year: 'numeric' }),
+        fileName: file?.name ?? '',
+        mediaProvider: media?.provider ?? null,
+        mediaUrl: media?.url ?? null,
+        mediaPublicId: media?.publicId ?? null,
+        mediaResourceType: media?.resourceType ?? null,
+        mediaThumbnailUrl: media?.thumbnailUrl ?? null,
+        mediaSize: media?.bytes ?? null,
+        candleCount: 0,
+        isCoreMemory: false,
+        isCustom: true,
+      }
+
+      if (user?.id) {
+        const createdMemory = await createMemory(memory, user.id)
+        memory.id = createdMemory.id
+      }
+
+      const existingMemories = user?.id ? [] : JSON.parse(localStorage.getItem(CUSTOM_MEMORIES_KEY) ?? '[]')
+      const existingPulseIds = JSON.parse(localStorage.getItem(PULSING_MEMORIES_KEY) ?? '[]')
+      if (!user?.id) localStorage.setItem(CUSTOM_MEMORIES_KEY, JSON.stringify([...existingMemories, memory]))
+      localStorage.setItem(PULSING_MEMORIES_KEY, JSON.stringify([...new Set([...existingPulseIds, memory.id])]))
+      setSubmitted(true)
+      navigate('/')
+    } catch (uploadError) {
+      setError(uploadError.message || 'Uploaden is mislukt. Probeer het opnieuw.')
+    } finally {
+      setUploading(false)
+    }
   }
 
   function handleTypeChange(nextType) {
     setType(nextType)
     setFile(null)
+    setError('')
     setSubmitted(false)
+  }
+
+  function handleFileChange(event) {
+    const selectedFile = event.target.files?.[0] ?? null
+    setError('')
+
+    if (selectedFile) {
+      const validation = validateMediaFile(selectedFile, type)
+      if (!validation.valid) {
+        setFile(null)
+        setError(validation.message)
+        return
+      }
+    }
+
+    setFile(selectedFile)
   }
 
   const SelectedIcon = selectedType.icon
@@ -203,10 +265,14 @@ export default function AddMemoryPage() {
                     <>
                       <Upload className="mb-4 text-white/45" size={30} />
                       <span className="text-sm text-white/70">Kies een bestand voor deze herinnering</span>
-                      <span className="mt-2 text-xs text-white/35">{type === 'foto' ? 'JPG, PNG of WebP' : 'MP4 of MOV'}</span>
+                      <span className="mt-2 text-xs text-white/35">
+                        {type === 'foto'
+                          ? `JPG, PNG, WebP of GIF · max ${MEDIA_LIMITS.imageMaxBytes / 1024 / 1024}MB`
+                          : `MP4, MOV of WebM · max ${MEDIA_LIMITS.videoMaxBytes / 1024 / 1024}MB`}
+                      </span>
                     </>
                   )}
-                  <input type="file" accept={selectedType.accept} onChange={(event) => setFile(event.target.files?.[0] ?? null)} className="hidden" />
+                  <input type="file" accept={selectedType.accept} onChange={handleFileChange} className="hidden" />
                 </label>
               </div>
             )}
@@ -231,9 +297,19 @@ export default function AddMemoryPage() {
               </div>
             )}
 
-            <button type="submit" className="mt-6 flex w-full items-center justify-center gap-2 rounded-full bg-white px-5 py-3 text-sm font-medium text-black transition hover:bg-purple-100">
+            {error && (
+              <div className="mt-4 rounded-2xl border border-rose-300/20 bg-rose-300/10 px-4 py-3 text-sm text-rose-100">
+                {error}
+              </div>
+            )}
+
+            <button
+              type="submit"
+              disabled={uploading}
+              className="mt-6 flex w-full items-center justify-center gap-2 rounded-full bg-white px-5 py-3 text-sm font-medium text-black transition hover:bg-purple-100 disabled:cursor-not-allowed disabled:opacity-60"
+            >
               <Send size={16} />
-              Herinnering voorbereiden
+              {uploading ? 'Media uploaden...' : 'Herinnering voorbereiden'}
             </button>
           </motion.form>
         </main>
