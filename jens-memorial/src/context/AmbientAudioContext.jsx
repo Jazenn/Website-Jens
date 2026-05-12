@@ -1,9 +1,11 @@
 import { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react'
 
-const AMBIENT_AUDIO_SRC = '/audio/Space Ambient  Music ★ Pure Cosmic Relaxation ★ Mind Relaxation [gCWaRhNUvfc].mp3'
+const AMBIENT_AUDIO_SRC = import.meta.env.VITE_AMBIENT_AUDIO_URL
 const AmbientAudioContext = createContext(null)
 
 function createAmbientPlayer() {
+  if (!AMBIENT_AUDIO_SRC) return null
+
   const audio = new Audio(AMBIENT_AUDIO_SRC)
   const fadeDuration = 6
   const maxVolume = 0.42
@@ -88,6 +90,10 @@ export function AmbientAudioProvider({ children }) {
 
   const start = async () => {
     if (!playerRef.current) playerRef.current = createAmbientPlayer()
+    if (!playerRef.current) {
+      setBlocked(true)
+      return
+    }
 
     try {
       await playerRef.current.play()
