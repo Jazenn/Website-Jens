@@ -57,9 +57,21 @@ function InitialisingScreen() {
   )
 }
 
+function ConfigurationErrorScreen({ message }) {
+  return (
+    <div className="flex min-h-screen items-center justify-center px-6 text-center" style={{ background: 'var(--cosmic-bg)' }}>
+      <div className="max-w-lg rounded-[2rem] border border-red-300/20 bg-black/35 p-8 shadow-2xl backdrop-blur-md">
+        <p className="text-xs uppercase tracking-[0.35em] text-red-200/70">Configuratie mist</p>
+        <h1 className="mt-4 text-2xl font-light tracking-[0.12em] text-white">De site kan nog niet starten</h1>
+        <p className="mt-4 text-sm leading-7 text-white/60">{message}</p>
+      </div>
+    </div>
+  )
+}
+
 function App() {
   const location = useLocation()
-  const { loading } = useAuth()
+  const { loading, configError } = useAuth()
 
   useEffect(() => {
     if (loading) return
@@ -71,7 +83,9 @@ function App() {
     <AmbientAudioProvider>
       <MusicPlayerProvider>
         <AnimatePresence mode="wait" initial={false}>
-          {loading ? (
+          {configError ? (
+            <ConfigurationErrorScreen message={configError} />
+          ) : loading ? (
             <InitialisingScreen />
           ) : (
             <motion.div

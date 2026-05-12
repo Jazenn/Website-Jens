@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useState } from 'react'
-import { supabase } from '../lib/supabase'
+import { supabase, supabaseConfigError } from '../lib/supabase'
 
 const AuthContext = createContext(null)
 const adminEmail = import.meta.env.VITE_ADMIN_EMAIL?.toLowerCase()
@@ -103,9 +103,11 @@ async function loadUserRecord(authUser) {
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null)
   const [userRecord, setUserRecord] = useState(null)
-  const [loading, setLoading] = useState(true)
+  const [loading, setLoading] = useState(!supabaseConfigError)
 
   useEffect(() => {
+    if (supabaseConfigError) return
+
     let mounted = true
 
     async function initialiseAuth() {
@@ -167,7 +169,15 @@ export function AuthProvider({ children }) {
   const isApproved = userRecord?.approved === true
 
   return (
-    <AuthContext.Provider value={{ user, userRecord, loading, signOut, isAdmin, isApproved }}>
+    <AuthContext.Provider value={{
+      user,
+      userRecord,
+      loading,
+      configError: supabaseConfigError,
+      signOut,
+      isAdmin,
+      isApproved
+    }}>
       {children}
     </AuthContext.Provider>
   )
