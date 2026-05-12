@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom'
 import ForceGraph3D from '3d-force-graph'
 import * as THREE from 'three'
 import { AnimatePresence, motion } from 'framer-motion'
-import { Heart, Music, PenLine, Shield, UserRound, Volume2, VolumeX, X } from 'lucide-react'
+import { Heart, Music, PenLine, Shield, Volume2, VolumeX, X } from 'lucide-react'
 import { useAmbientAudio } from '../context/AmbientAudioContext'
 import { useAuth } from '../context/AuthContext'
 import { useMusicPlayer } from '../context/MusicPlayerContext'
@@ -595,7 +595,6 @@ export default function ConstellationPage() {
       <nav className={`absolute bottom-5 left-1/2 z-20 flex -translate-x-1/2 items-center gap-2 rounded-full border border-purple-300/15 bg-black/30 px-3 py-2 shadow-2xl backdrop-blur-md transition-opacity duration-700 ${showRevealOverlay ? 'pointer-events-none opacity-0' : 'opacity-100'}`}>
         <NavItem to="/add" label="Toevoegen" icon={<PenLine size={16} />} />
         <NavItem to="/music" label="Muziek" icon={<Music size={16} />} />
-        <NavItem to="/about" label="Over" icon={<UserRound size={16} />} />
         <NavItem to="/admin" label="Admin" icon={<Shield size={16} />} />
       </nav>
 

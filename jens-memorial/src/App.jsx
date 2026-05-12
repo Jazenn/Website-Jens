@@ -7,7 +7,6 @@ import WaitingPage from './pages/WaitingPage'
 import ConstellationPage from './pages/ConstellationPage'
 import AddMemoryPage from './pages/AddMemoryPage'
 import MusicPage from './pages/MusicPage'
-import AboutPage from './pages/AboutPage'
 import AdminPage from './pages/AdminPage'
 import JourneyIntroPage from './pages/JourneyIntroPage'
 import { AmbientAudioProvider } from './context/AmbientAudioContext'
@@ -115,14 +114,6 @@ function App() {
                   element={
                     <ProtectedRoute>
                       <MusicPage />
-                    </ProtectedRoute>
-                  }
-                />
-                <Route
-                  path="/about"
-                  element={
-                    <ProtectedRoute>
-                      <AboutPage />
                     </ProtectedRoute>
                   }
                 />
