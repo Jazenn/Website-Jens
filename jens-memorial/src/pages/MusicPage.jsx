@@ -1,12 +1,20 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { ArrowLeft, ExternalLink, Music, Pause, Play, Plus, Radio, Sparkles, Upload, X } from 'lucide-react'
+import { AnimatePresence, motion } from 'framer-motion'
+import { ArrowLeft, ExternalLink, Music, Pause, Play, Plus, Radio, SkipBack, SkipForward, Sparkles, Upload, Volume2, X } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import { useMusicPlayer } from '../context/MusicPlayerContext'
 import { MEDIA_LIMITS, uploadAudioToCloudinary, validateAudioFile } from '../lib/cloudinary'
 import { createTrack, fetchTracks, getYoutubeId } from '../lib/tracks'
 
 const TEST_TRACK_URL = 'https://www.youtube.com/watch?v=ADFEcvI-Vfk'
+const TRACK_FIELD_LIMITS = {
+  title: 80,
+  artist: 80,
+  url: 500,
+  submittedByName: 60,
+  reason: 500,
+}
 
 function formatTime(seconds) {
   if (!seconds || Number.isNaN(seconds)) return '0:00'
@@ -31,21 +39,21 @@ function Visualizer({ levels, compact = false }) {
 
 export default function MusicPage() {
   const { user } = useAuth()
-  const { currentTrack, isPlaying, progress, duration, levels, playTrack, toggle, setPlaylist } = useMusicPlayer()
+  const { currentTrack, isPlaying, progress, duration, volume, levels, playTrack, toggle, seek, setPlaylist, playNext, playPrevious, setVolume } = useMusicPlayer()
   const [tracks, setTracks] = useState([])
   const [expandedTrackId, setExpandedTrackId] = useState(null)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
   const [audioFile, setAudioFile] = useState(null)
+  const [showAddForm, setShowAddForm] = useState(false)
   const [form, setForm] = useState({
     title: '',
     artist: '',
-    url: TEST_TRACK_URL,
+    url: '',
+    submittedByName: '',
+    reason: '',
   })
-
-  const expandedTrack = useMemo(() => tracks.find((track) => track.id === expandedTrackId), [tracks, expandedTrackId])
-  const selectedYoutubeId = useMemo(() => getYoutubeId(expandedTrack?.externalUrl ?? currentTrack?.externalUrl ?? ''), [expandedTrack, currentTrack])
 
   async function loadTracks() {
     try {
@@ -66,10 +74,6 @@ export default function MusicPage() {
   useEffect(() => {
     setPlaylist(tracks)
   }, [tracks, setPlaylist])
-
-  useEffect(() => {
-    if (currentTrack?.id) setExpandedTrackId(currentTrack.id)
-  }, [currentTrack?.id])
 
   function handleAudioFileChange(event) {
     const selectedFile = event.target.files?.[0] ?? null
@@ -108,14 +112,17 @@ export default function MusicPage() {
           externalUrl: externalUrl || audio?.url,
           audioPublicId: audio?.publicId,
           durationSeconds: audio?.durationSeconds,
+          submittedByName: form.submittedByName.trim(),
+          reason: form.reason.trim(),
         },
         user.id
       )
 
       setTracks((currentTracks) => [track, ...currentTracks])
       setExpandedTrackId(track.id)
-      setForm({ title: '', artist: '', url: '' })
+      setForm({ title: '', artist: '', url: '', submittedByName: '', reason: '' })
       setAudioFile(null)
+      setShowAddForm(false)
     } catch (saveError) {
       setError(saveError.message || 'Nummer toevoegen is mislukt.')
     } finally {
@@ -145,91 +152,167 @@ export default function MusicPage() {
           </div>
         </header>
 
-        <section className="mb-8 grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
+        <section className="mb-8">
           <div className="rounded-[2rem] border border-white/10 bg-black/30 p-7 shadow-2xl backdrop-blur-xl">
-            <p className="mb-3 text-xs uppercase tracking-[0.35em] text-white/35">Voor Jens</p>
-            <h1 className="text-4xl font-extralight tracking-[0.16em] text-white">Muziek</h1>
-            <p className="mt-4 max-w-2xl text-sm leading-7 text-white/55">
-              De site-player gebruikt ge?ploade audio, zodat muziek door de hele site kan blijven spelen. Een YouTube of Spotify link kan erbij als bron of herinnering.
-            </p>
+            <div className="flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between">
+              <div>
+                <p className="mb-3 text-xs uppercase tracking-[0.35em] text-white/35">Voor Jens</p>
+                <h1 className="text-4xl font-extralight tracking-[0.16em] text-white">Muziek</h1>
+                <p className="mt-4 max-w-2xl text-sm leading-7 text-white/55">
+                  Een verzameling aan nummers die passen bij Jens, je doen denken aan Jens of gewoon een nummer dat je mooi vindt. Luister naar de muziek terwijl je door de site navigeert, en voeg eventueel zelf een nummer toe aan de lijst.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowAddForm((current) => !current)}
+                className="inline-flex shrink-0 items-center justify-center gap-2 rounded-full border border-purple-200/30 bg-purple-200/15 px-5 py-3 text-sm font-medium text-purple-50 shadow-[0_0_24px_rgba(196,181,253,0.12)] transition hover:bg-purple-200/25"
+              >
+                {showAddForm ? <X size={17} /> : <Plus size={17} />}
+                {showAddForm ? 'Sluit' : 'Voeg nummer toe'}
+              </button>
+            </div>
 
-            <div className="mt-8 rounded-3xl border border-purple-200/10 bg-white/[0.04] p-6">
+            <AnimatePresence>
+              {showAddForm && (
+                <motion.form
+                  onSubmit={handleSubmit}
+                  initial={{ opacity: 0, y: -12, scale: 0.98 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0, y: -8, scale: 0.98 }}
+                  transition={{ duration: 0.28, ease: 'easeOut' }}
+                  className="relative mt-6 rounded-3xl border border-purple-200/15 bg-white/[0.04] p-6 shadow-2xl"
+                >
+                  <div className="mb-5 flex items-center gap-3">
+                    <div className="rounded-full bg-purple-300/10 p-3 text-purple-100">
+                      <Plus size={18} />
+                    </div>
+                    <div>
+                      <h2 className="text-xl font-light text-white">Nummer toevoegen</h2>
+                      <p className="text-xs text-white/40">Voeg een lied toe dat bij Jens past of je aan hem doet denken.</p>
+                    </div>
+                  </div>
+
+                  {error && <div className="mb-4 rounded-2xl border border-rose-300/20 bg-rose-300/10 px-4 py-3 text-sm text-rose-100">{error}</div>}
+
+                  <label className="mb-4 block">
+                    <span className="mb-2 block text-xs uppercase tracking-[0.22em] text-white/35">Titel</span>
+                    <input value={form.title} maxLength={TRACK_FIELD_LIMITS.title} onChange={(event) => setForm({ ...form, title: event.target.value })} className="w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white outline-none transition focus:border-purple-200/40" placeholder="Titel van het nummer" />
+                  </label>
+
+                  <label className="mb-4 block">
+                    <span className="mb-2 block text-xs uppercase tracking-[0.22em] text-white/35">Artiest</span>
+                    <input value={form.artist} maxLength={TRACK_FIELD_LIMITS.artist} onChange={(event) => setForm({ ...form, artist: event.target.value })} className="w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white outline-none transition focus:border-purple-200/40" placeholder="Artiest of band" />
+                  </label>
+
+                  <label className="mb-4 block">
+                    <span className="mb-2 block text-xs uppercase tracking-[0.22em] text-white/35">YouTube/Spotify link (optioneel)</span>
+                    <input value={form.url} maxLength={TRACK_FIELD_LIMITS.url} onChange={(event) => setForm({ ...form, url: event.target.value })} className="w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white outline-none transition focus:border-purple-200/40" placeholder="Link naar originele versie" />
+                  </label>
+
+                  <label className="mb-4 block">
+                    <span className="mb-2 block text-xs uppercase tracking-[0.22em] text-white/35">Jouw naam (optioneel)</span>
+                    <input value={form.submittedByName} maxLength={TRACK_FIELD_LIMITS.submittedByName} onChange={(event) => setForm({ ...form, submittedByName: event.target.value })} className="w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white outline-none transition focus:border-purple-200/40" placeholder="Bijvoorbeeld: Ro-anus of Kir-anus" />
+                  </label>
+
+                  <label className="mb-4 block">
+                    <span className="mb-2 flex items-center justify-between text-xs uppercase tracking-[0.22em] text-white/35">
+                      Waarom dit nummer? (optioneel)
+                      <span className="tracking-normal text-white/25">{form.reason.length}/{TRACK_FIELD_LIMITS.reason}</span>
+                    </span>
+                    <textarea
+                      value={form.reason}
+                      maxLength={TRACK_FIELD_LIMITS.reason}
+                      onChange={(event) => setForm({ ...form, reason: event.target.value })}
+                      rows={4}
+                      className="w-full resize-none rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm leading-6 text-white outline-none transition focus:border-purple-200/40"
+                      placeholder="Een herinnering, gevoel of reden waarom dit nummer bij Jens past..."
+                    />
+                  </label>
+
+                  <div className="mb-5">
+                    <span className="mb-2 block text-xs uppercase tracking-[0.22em] text-white/35">Audiobestand (optioneel)</span>
+                    <label className="flex cursor-pointer flex-col items-center justify-center rounded-3xl border border-dashed border-white/15 bg-white/[0.04] p-5 text-center transition hover:border-white/35">
+                      {audioFile ? (
+                        <div className="flex w-full items-center justify-between gap-3 text-left">
+                          <div>
+                            <p className="text-sm text-white/80">{audioFile.name}</p>
+                            <p className="mt-1 text-xs text-white/35">Dit nummer kan straks door de hele site blijven spelen.</p>
+                          </div>
+                          <button type="button" onClick={(event) => { event.preventDefault(); setAudioFile(null) }} className="rounded-full bg-black/40 p-2 text-white/60">
+                            <X size={16} />
+                          </button>
+                        </div>
+                      ) : (
+                        <>
+                          <Upload className="mb-3 text-white/45" size={28} />
+                          <span className="text-sm text-white/70">Upload MP3, WAV, M4A, AAC of OGG</span>
+                          <span className="mt-2 text-xs leading-5 text-white/35">
+                            Zonder audio upload staat het nummer alleen als link in de muzieklijst. Het speelt dan niet door op de achtergrond en komt niet in de random achtergrondplaylist. Max {MEDIA_LIMITS.audioMaxBytes / 1024 / 1024}MB.
+                          </span>
+                        </>
+                      )}
+                      <input type="file" accept="audio/*" onChange={handleAudioFileChange} className="hidden" />
+                    </label>
+                  </div>
+
+                  <button type="submit" disabled={saving} className="inline-flex w-full items-center justify-center gap-2 rounded-full bg-white px-5 py-3 text-sm font-medium text-black transition hover:bg-purple-100 disabled:opacity-50">
+                    <Sparkles size={16} />
+                    {saving ? 'Opslaan...' : 'Toevoegen'}
+                  </button>
+                </motion.form>
+              )}
+            </AnimatePresence>
+
+            <div className="relative mt-8 rounded-3xl border border-purple-200/10 bg-white/[0.04] p-6">
               <Visualizer levels={levels} />
               <div className="mt-6 text-center">
                 <p className="text-xs uppercase tracking-[0.24em] text-white/35">Nu speelt</p>
                 <h2 className="mt-2 text-2xl font-light text-white">{currentTrack?.title ?? 'Nog geen nummer'}</h2>
                 {currentTrack?.artist && <p className="mt-1 text-sm text-white/45">{currentTrack.artist}</p>}
-                {currentTrack?.sourceType === 'audio' && (
-                  <div className="mt-5">
-                    <div className="h-1 overflow-hidden rounded-full bg-white/10">
-                      <div className="h-full rounded-full bg-purple-200" style={{ width: `${duration ? (progress / duration) * 100 : 0}%` }} />
-                    </div>
-                    <p className="mt-2 text-xs text-white/35">{formatTime(progress)} / {formatTime(duration)}</p>
-                  </div>
-                )}
+                <div className="mt-6">
+                  <button
+                    type="button"
+                    disabled={!duration}
+                    onClick={(event) => {
+                      const rect = event.currentTarget.getBoundingClientRect()
+                      const nextProgress = ((event.clientX - rect.left) / rect.width) * duration
+                      seek(nextProgress)
+                    }}
+                    className="h-2 w-full overflow-hidden rounded-full bg-white/10 disabled:cursor-not-allowed disabled:opacity-50"
+                    aria-label="Spoel door nummer"
+                  >
+                    <span className="block h-full rounded-full bg-purple-200" style={{ width: `${duration ? (progress / duration) * 100 : 0}%` }} />
+                  </button>
+                  <p className="mt-2 text-xs text-white/35">{formatTime(progress)} / {formatTime(duration)}</p>
+                </div>
+                <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
+                  <button type="button" onClick={playPrevious} className="rounded-full border border-white/10 bg-black/25 p-3 text-white/70 transition hover:bg-white/10 hover:text-white">
+                    <SkipBack size={18} />
+                  </button>
+                  <button type="button" onClick={toggle} disabled={!currentTrack} className="inline-flex h-14 w-14 items-center justify-center rounded-full bg-white text-black transition hover:bg-purple-100 disabled:opacity-40">
+                    {isPlaying ? <Pause size={22} /> : <Play size={22} />}
+                  </button>
+                  <button type="button" onClick={playNext} className="rounded-full border border-white/10 bg-black/25 p-3 text-white/70 transition hover:bg-white/10 hover:text-white">
+                    <SkipForward size={18} />
+                  </button>
+                </div>
+                <div className="mx-auto mt-6 flex max-w-sm items-center gap-3 rounded-full border border-white/10 bg-black/20 px-4 py-3">
+                  <Volume2 size={16} className="text-white/45" />
+                  <input
+                    type="range"
+                    min="0"
+                    max="1"
+                    step="0.01"
+                    value={volume}
+                    onChange={(event) => setVolume(event.target.value)}
+                    className="w-full accent-purple-200"
+                    aria-label="Volume"
+                  />
+                  <span className="w-10 text-right text-xs text-white/40">{Math.round(volume * 100)}%</span>
+                </div>
               </div>
             </div>
           </div>
-
-          <form onSubmit={handleSubmit} className="rounded-[2rem] border border-white/10 bg-black/30 p-7 shadow-2xl backdrop-blur-xl">
-            <div className="mb-5 flex items-center gap-3">
-              <div className="rounded-full bg-purple-300/10 p-3 text-purple-100">
-                <Plus size={18} />
-              </div>
-              <div>
-                <h2 className="text-xl font-light text-white">Nummer toevoegen</h2>
-                <p className="text-xs text-white/40">Audio uploaden is optioneel, maar nodig voor volledige integratie.</p>
-              </div>
-            </div>
-
-            {error && <div className="mb-4 rounded-2xl border border-rose-300/20 bg-rose-300/10 px-4 py-3 text-sm text-rose-100">{error}</div>}
-
-            <label className="mb-4 block">
-              <span className="mb-2 block text-xs uppercase tracking-[0.22em] text-white/35">Titel</span>
-              <input value={form.title} onChange={(event) => setForm({ ...form, title: event.target.value })} className="w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white outline-none transition focus:border-purple-200/40" placeholder="Titel van het nummer" />
-            </label>
-
-            <label className="mb-4 block">
-              <span className="mb-2 block text-xs uppercase tracking-[0.22em] text-white/35">Artiest</span>
-              <input value={form.artist} onChange={(event) => setForm({ ...form, artist: event.target.value })} className="w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white outline-none transition focus:border-purple-200/40" placeholder="Artiest of band" />
-            </label>
-
-            <label className="mb-4 block">
-              <span className="mb-2 block text-xs uppercase tracking-[0.22em] text-white/35">YouTube/Spotify link (optioneel)</span>
-              <input value={form.url} onChange={(event) => setForm({ ...form, url: event.target.value })} className="w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white outline-none transition focus:border-purple-200/40" placeholder="Link naar originele versie" />
-            </label>
-
-            <div className="mb-5">
-              <span className="mb-2 block text-xs uppercase tracking-[0.22em] text-white/35">Audiobestand (optioneel)</span>
-              <label className="flex cursor-pointer flex-col items-center justify-center rounded-3xl border border-dashed border-white/15 bg-white/[0.04] p-5 text-center transition hover:border-white/35">
-                {audioFile ? (
-                  <div className="flex w-full items-center justify-between gap-3 text-left">
-                    <div>
-                      <p className="text-sm text-white/80">{audioFile.name}</p>
-                      <p className="mt-1 text-xs text-white/35">Dit nummer kan straks door de hele site blijven spelen.</p>
-                    </div>
-                    <button type="button" onClick={(event) => { event.preventDefault(); setAudioFile(null) }} className="rounded-full bg-black/40 p-2 text-white/60">
-                      <X size={16} />
-                    </button>
-                  </div>
-                ) : (
-                  <>
-                    <Upload className="mb-3 text-white/45" size={28} />
-                    <span className="text-sm text-white/70">Upload MP3, WAV, M4A, AAC of OGG</span>
-                    <span className="mt-2 text-xs leading-5 text-white/35">
-                      Zonder audio upload staat het nummer alleen als link in de muzieklijst. Het speelt dan niet door op de achtergrond en komt niet in de random achtergrondplaylist. Max {MEDIA_LIMITS.audioMaxBytes / 1024 / 1024}MB.
-                    </span>
-                  </>
-                )}
-                <input type="file" accept="audio/*" onChange={handleAudioFileChange} className="hidden" />
-              </label>
-            </div>
-
-            <button type="submit" disabled={saving} className="inline-flex w-full items-center justify-center gap-2 rounded-full bg-white px-5 py-3 text-sm font-medium text-black transition hover:bg-purple-100 disabled:opacity-50">
-              <Sparkles size={16} />
-              {saving ? 'Opslaan...' : 'Toevoegen'}
-            </button>
-          </form>
         </section>
 
         <section className="rounded-[2rem] border border-white/10 bg-black/30 p-4 shadow-2xl backdrop-blur-xl sm:p-6">
@@ -251,7 +334,12 @@ export default function MusicPage() {
                         </div>
                         <div className="min-w-0">
                           <h3 className="truncate text-lg font-light text-white">{track.title}</h3>
-                          <p className="text-sm text-white/45">{track.artist || 'Onbekende artiest'} ? {playable ? 'site-player' : 'link only'}</p>
+                          <div className="mt-1 flex flex-wrap items-center gap-2 text-sm text-white/45">
+                            <span>{track.artist || 'Onbekende artiest'}</span>
+                            <span className="rounded-full border border-white/10 px-2 py-0.5 text-[0.65rem] uppercase tracking-[0.14em] text-white/35">
+                              {playable ? 'Speelt op de site' : 'Alleen link'}
+                            </span>
+                          </div>
                         </div>
                       </button>
 
@@ -275,12 +363,10 @@ export default function MusicPage() {
 
                     {expanded && (
                       <div className="mt-5 border-t border-white/10 pt-5">
-                        {currentTrack?.id === track.id && playable && (
-                          <div className="mb-4 rounded-2xl border border-purple-200/15 bg-black/20 p-4">
-                            <Visualizer levels={levels} compact />
-                            <div className="mt-3 h-1 overflow-hidden rounded-full bg-white/10">
-                              <div className="h-full rounded-full bg-purple-200" style={{ width: `${duration ? (progress / duration) * 100 : 0}%` }} />
-                            </div>
+                        {(track.submittedByName || track.reason) && (
+                          <div className="mb-4 rounded-2xl border border-white/10 bg-black/20 px-4 py-3">
+                            {track.submittedByName && <p className="mb-2 text-xs uppercase tracking-[0.22em] text-white/35">Toegevoegd door {track.submittedByName}</p>}
+                            {track.reason && <p className="text-sm leading-6 text-white/70">“{track.reason}”</p>}
                           </div>
                         )}
                         {!playable && (
@@ -307,18 +393,6 @@ export default function MusicPage() {
             </div>
           )}
         </section>
-
-        {selectedYoutubeId && !expandedTrack && (
-          <section className="mt-6 overflow-hidden rounded-[2rem] border border-white/10 bg-black/30 shadow-2xl backdrop-blur-xl">
-            <iframe
-              title={currentTrack?.title ?? 'YouTube nummer'}
-              src={`https://www.youtube.com/embed/${selectedYoutubeId}`}
-              className="aspect-video w-full"
-              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-              allowFullScreen
-            />
-          </section>
-        )}
       </main>
     </div>
   )

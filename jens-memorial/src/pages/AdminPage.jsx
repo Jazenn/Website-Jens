@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { ArrowLeft, ExternalLink, FileText, Flame, Image, Music, Quote, RefreshCw, Star, Trash2, Video } from 'lucide-react'
-import { deleteMemory, fetchMemories, updateMemoryCoreStatus } from '../lib/memories'
-import { deleteTrack, fetchTracks } from '../lib/tracks'
+import { ArrowLeft, Edit3, ExternalLink, FileText, Flame, Image, Music, Quote, RefreshCw, Save, Star, Trash2, Video, X } from 'lucide-react'
+import { deleteMemory, fetchMemories, updateMemory, updateMemoryCoreStatus } from '../lib/memories'
+import { deleteTrack, fetchTracks, updateTrack } from '../lib/tracks'
 
 const TABS = [
   { id: 'foto', label: "Foto's", icon: Image },
@@ -17,6 +17,16 @@ const TYPE_ICONS = {
   video: Video,
   quote: Quote,
   tekst: FileText,
+}
+const ADMIN_FIELD_LIMITS = {
+  title: 100,
+  author: 60,
+  trackTitle: 80,
+  artist: 80,
+  url: 500,
+  submittedByName: 60,
+  body: 1200,
+  reason: 500,
 }
 
 function sortNewestFirst(items) {
@@ -90,6 +100,30 @@ export default function AdminPage() {
       setTracks((currentTracks) => currentTracks.filter((item) => item.id !== track.id))
     } catch (deleteError) {
       setError(deleteError.message || 'Nummer verwijderen is mislukt.')
+    } finally {
+      setBusyId(null)
+    }
+  }
+
+  async function handleUpdateMemory(memory, updates) {
+    try {
+      setBusyId(memory.id)
+      const updatedMemory = await updateMemory(memory.id, updates)
+      setMemories((currentMemories) => currentMemories.map((item) => (item.id === memory.id ? updatedMemory : item)))
+    } catch (updateError) {
+      setError(updateError.message || 'Herinnering aanpassen is mislukt.')
+    } finally {
+      setBusyId(null)
+    }
+  }
+
+  async function handleUpdateTrack(track, updates) {
+    try {
+      setBusyId(track.id)
+      const updatedTrack = await updateTrack(track.id, updates)
+      setTracks((currentTracks) => currentTracks.map((item) => (item.id === track.id ? updatedTrack : item)))
+    } catch (updateError) {
+      setError(updateError.message || 'Nummer aanpassen is mislukt.')
     } finally {
       setBusyId(null)
     }
@@ -189,7 +223,7 @@ export default function AdminPage() {
           ) : activeTab === 'music' ? (
             <div className="grid gap-4">
               {sortedTracks.map((track) => (
-                <TrackAdminCard key={track.id} track={track} busy={busyId === track.id} onDelete={handleDeleteTrack} />
+                <TrackAdminCard key={track.id} track={track} busy={busyId === track.id} onDelete={handleDeleteTrack} onUpdate={handleUpdateTrack} />
               ))}
             </div>
           ) : (
@@ -200,6 +234,7 @@ export default function AdminPage() {
                   memory={memory}
                   busy={busyId === memory.id}
                   onDelete={handleDeleteMemory}
+                  onUpdate={handleUpdateMemory}
                   onToggleCore={handleToggleCore}
                 />
               ))}
@@ -211,8 +246,26 @@ export default function AdminPage() {
   )
 }
 
-function MemoryAdminCard({ memory, busy, onDelete, onToggleCore }) {
+function MemoryAdminCard({ memory, busy, onDelete, onUpdate, onToggleCore }) {
   const Icon = TYPE_ICONS[memory.type] ?? Quote
+  const [editing, setEditing] = useState(false)
+  const [form, setForm] = useState({ title: memory.title, author: memory.author, body: memory.body })
+
+  function resetForm() {
+    setForm({ title: memory.title, author: memory.author, body: memory.body })
+    setEditing(false)
+  }
+
+  async function handleSubmit(event) {
+    event.preventDefault()
+    if (!form.title.trim()) return
+    await onUpdate(memory, {
+      title: form.title.trim(),
+      author: form.author.trim(),
+      body: form.body.trim(),
+    })
+    setEditing(false)
+  }
 
   return (
     <article className="grid gap-4 rounded-3xl border border-white/10 bg-white/[0.04] p-4 sm:grid-cols-[8rem_1fr_auto]">
@@ -246,13 +299,48 @@ function MemoryAdminCard({ memory, busy, onDelete, onToggleCore }) {
           )}
         </div>
 
-        <h2 className="text-xl font-light text-white">{memory.title}</h2>
-        {memory.author && <p className="mt-1 text-xs text-white/45">Toegevoegd door {memory.author}</p>}
-        {memory.body && <p className="mt-3 line-clamp-2 text-sm leading-6 text-white/55">{memory.body}</p>}
-        <p className="mt-3 break-all text-[0.7rem] text-white/25">{memory.id}</p>
+        {editing ? (
+          <form onSubmit={handleSubmit} className="grid gap-3">
+            <input value={form.title} maxLength={ADMIN_FIELD_LIMITS.title} onChange={(event) => setForm({ ...form, title: event.target.value })} className="rounded-2xl border border-white/10 bg-white/[0.06] px-4 py-3 text-sm text-white outline-none focus:border-purple-200/45" placeholder="Titel" />
+            <input value={form.author} maxLength={ADMIN_FIELD_LIMITS.author} onChange={(event) => setForm({ ...form, author: event.target.value })} className="rounded-2xl border border-white/10 bg-white/[0.06] px-4 py-3 text-sm text-white outline-none focus:border-purple-200/45" placeholder="Naam optioneel" />
+            <label>
+              <span className="mb-2 flex justify-between text-xs uppercase tracking-[0.18em] text-white/35">
+                Tekst
+                <span className="tracking-normal">{form.body.length}/{ADMIN_FIELD_LIMITS.body}</span>
+              </span>
+              <textarea value={form.body} maxLength={ADMIN_FIELD_LIMITS.body} onChange={(event) => setForm({ ...form, body: event.target.value })} rows={4} className="w-full resize-none rounded-2xl border border-white/10 bg-white/[0.06] px-4 py-3 text-sm leading-6 text-white outline-none focus:border-purple-200/45" placeholder="Tekst of context" />
+            </label>
+            <div className="flex flex-wrap gap-2">
+              <button type="submit" disabled={busy} className="inline-flex items-center gap-2 rounded-full border border-emerald-200/20 px-4 py-2 text-xs text-emerald-100 transition hover:bg-emerald-300/10 disabled:opacity-50">
+                <Save size={14} />
+                Opslaan
+              </button>
+              <button type="button" disabled={busy} onClick={resetForm} className="inline-flex items-center gap-2 rounded-full border border-white/10 px-4 py-2 text-xs text-white/55 transition hover:bg-white/10 disabled:opacity-50">
+                <X size={14} />
+                Annuleer
+              </button>
+            </div>
+          </form>
+        ) : (
+          <>
+            <h2 className="text-xl font-light text-white">{memory.title}</h2>
+            {memory.author && <p className="mt-1 text-xs text-white/45">Toegevoegd door {memory.author}</p>}
+            {memory.body && <p className="mt-3 line-clamp-2 text-sm leading-6 text-white/55">{memory.body}</p>}
+            <p className="mt-3 break-all text-[0.7rem] text-white/25">{memory.id}</p>
+          </>
+        )}
       </div>
 
       <div className="flex items-start gap-2 sm:flex-col">
+        <button
+          type="button"
+          disabled={busy}
+          onClick={() => setEditing(true)}
+          className="inline-flex items-center gap-2 rounded-full border border-purple-200/20 px-4 py-2 text-xs text-purple-100 transition hover:bg-purple-300/10 disabled:opacity-50"
+        >
+          <Edit3 size={14} />
+          Bewerk
+        </button>
         <button
           type="button"
           disabled={busy}
@@ -276,7 +364,40 @@ function MemoryAdminCard({ memory, busy, onDelete, onToggleCore }) {
   )
 }
 
-function TrackAdminCard({ track, busy, onDelete }) {
+function TrackAdminCard({ track, busy, onDelete, onUpdate }) {
+  const [editing, setEditing] = useState(false)
+  const [form, setForm] = useState({
+    title: track.title,
+    artist: track.artist,
+    externalUrl: track.externalUrl,
+    submittedByName: track.submittedByName,
+    reason: track.reason,
+  })
+
+  function resetForm() {
+    setForm({
+      title: track.title,
+      artist: track.artist,
+      externalUrl: track.externalUrl,
+      submittedByName: track.submittedByName,
+      reason: track.reason,
+    })
+    setEditing(false)
+  }
+
+  async function handleSubmit(event) {
+    event.preventDefault()
+    if (!form.title.trim()) return
+    await onUpdate(track, {
+      title: form.title.trim(),
+      artist: form.artist.trim(),
+      externalUrl: form.externalUrl.trim(),
+      submittedByName: form.submittedByName.trim(),
+      reason: form.reason.trim(),
+    })
+    setEditing(false)
+  }
+
   return (
     <article className="grid gap-4 rounded-3xl border border-white/10 bg-white/[0.04] p-4 sm:grid-cols-[8rem_1fr_auto]">
       <div className="flex h-32 items-center justify-center rounded-2xl border border-white/10 bg-black/30 text-white/35">
@@ -285,23 +406,62 @@ function TrackAdminCard({ track, busy, onDelete }) {
 
       <div>
         <div className="mb-2 flex flex-wrap items-center gap-2">
-          <span className="rounded-full border border-white/10 px-3 py-1 text-[0.65rem] uppercase tracking-[0.18em] text-white/45">{track.sourceType === 'audio' ? 'site-player' : 'link only'}</span>
+          <span className="rounded-full border border-white/10 px-3 py-1 text-[0.65rem] uppercase tracking-[0.18em] text-white/45">{track.sourceType === 'audio' ? 'Speelt op de site' : 'Alleen link'}</span>
           <span className="rounded-full border border-white/10 px-3 py-1 text-[0.65rem] uppercase tracking-[0.18em] text-white/45">{formatDate(track.createdAt)}</span>
           {track.durationSeconds && <span className="rounded-full border border-white/10 px-3 py-1 text-[0.65rem] uppercase tracking-[0.18em] text-white/45">{Math.round(track.durationSeconds)} sec</span>}
         </div>
 
-        <h2 className="text-xl font-light text-white">{track.title}</h2>
-        {track.artist && <p className="mt-1 text-xs text-white/45">{track.artist}</p>}
-        {track.externalUrl && (
-          <a href={track.externalUrl} target="_blank" rel="noreferrer" className="mt-3 inline-flex items-center gap-2 text-xs text-purple-100/70 transition hover:text-purple-100">
-            <ExternalLink size={13} />
-            Open originele link
-          </a>
+        {editing ? (
+          <form onSubmit={handleSubmit} className="grid gap-3">
+            <input value={form.title} maxLength={ADMIN_FIELD_LIMITS.trackTitle} onChange={(event) => setForm({ ...form, title: event.target.value })} className="rounded-2xl border border-white/10 bg-white/[0.06] px-4 py-3 text-sm text-white outline-none focus:border-purple-200/45" placeholder="Titel" />
+            <input value={form.artist} maxLength={ADMIN_FIELD_LIMITS.artist} onChange={(event) => setForm({ ...form, artist: event.target.value })} className="rounded-2xl border border-white/10 bg-white/[0.06] px-4 py-3 text-sm text-white outline-none focus:border-purple-200/45" placeholder="Artiest" />
+            <input value={form.externalUrl} maxLength={ADMIN_FIELD_LIMITS.url} onChange={(event) => setForm({ ...form, externalUrl: event.target.value })} className="rounded-2xl border border-white/10 bg-white/[0.06] px-4 py-3 text-sm text-white outline-none focus:border-purple-200/45" placeholder="YouTube/Spotify link" />
+            <input value={form.submittedByName} maxLength={ADMIN_FIELD_LIMITS.submittedByName} onChange={(event) => setForm({ ...form, submittedByName: event.target.value })} className="rounded-2xl border border-white/10 bg-white/[0.06] px-4 py-3 text-sm text-white outline-none focus:border-purple-200/45" placeholder="Toegevoegd door" />
+            <label>
+              <span className="mb-2 flex justify-between text-xs uppercase tracking-[0.18em] text-white/35">
+                Waarom dit nummer?
+                <span className="tracking-normal">{form.reason.length}/{ADMIN_FIELD_LIMITS.reason}</span>
+              </span>
+              <textarea value={form.reason} maxLength={ADMIN_FIELD_LIMITS.reason} onChange={(event) => setForm({ ...form, reason: event.target.value })} rows={4} className="w-full resize-none rounded-2xl border border-white/10 bg-white/[0.06] px-4 py-3 text-sm leading-6 text-white outline-none focus:border-purple-200/45" placeholder="Persoonlijke toelichting" />
+            </label>
+            <div className="flex flex-wrap gap-2">
+              <button type="submit" disabled={busy} className="inline-flex items-center gap-2 rounded-full border border-emerald-200/20 px-4 py-2 text-xs text-emerald-100 transition hover:bg-emerald-300/10 disabled:opacity-50">
+                <Save size={14} />
+                Opslaan
+              </button>
+              <button type="button" disabled={busy} onClick={resetForm} className="inline-flex items-center gap-2 rounded-full border border-white/10 px-4 py-2 text-xs text-white/55 transition hover:bg-white/10 disabled:opacity-50">
+                <X size={14} />
+                Annuleer
+              </button>
+            </div>
+          </form>
+        ) : (
+          <>
+            <h2 className="text-xl font-light text-white">{track.title}</h2>
+            {track.artist && <p className="mt-1 text-xs text-white/45">{track.artist}</p>}
+            {track.submittedByName && <p className="mt-1 text-xs text-white/45">Toegevoegd door {track.submittedByName}</p>}
+            {track.reason && <p className="mt-3 line-clamp-2 text-sm leading-6 text-white/55">“{track.reason}”</p>}
+            {track.externalUrl && (
+              <a href={track.externalUrl} target="_blank" rel="noreferrer" className="mt-3 inline-flex items-center gap-2 text-xs text-purple-100/70 transition hover:text-purple-100">
+                <ExternalLink size={13} />
+                Open originele link
+              </a>
+            )}
+            <p className="mt-3 break-all text-[0.7rem] text-white/25">{track.id}</p>
+          </>
         )}
-        <p className="mt-3 break-all text-[0.7rem] text-white/25">{track.id}</p>
       </div>
 
       <div className="flex items-start gap-2 sm:flex-col">
+        <button
+          type="button"
+          disabled={busy}
+          onClick={() => setEditing(true)}
+          className="inline-flex items-center gap-2 rounded-full border border-purple-200/20 px-4 py-2 text-xs text-purple-100 transition hover:bg-purple-300/10 disabled:opacity-50"
+        >
+          <Edit3 size={14} />
+          Bewerk
+        </button>
         <button
           type="button"
           disabled={busy}

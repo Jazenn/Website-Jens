@@ -28,6 +28,16 @@ html, body {
   overflow-x: hidden;
 }
 
+* {
+  scrollbar-width: none;
+}
+
+*::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+  display: none;
+}
+
 #root {
   width: 100%;
   min-height: 100vh;
@@ -36,6 +46,41 @@ html, body {
 @keyframes pulse-star {
   0%, 100% { opacity: 0.4; transform: scale(1); }
   50% { opacity: 1; transform: scale(1.3); }
+}
+
+@keyframes cosmic-breathe {
+  0%, 100% { opacity: 0.32; transform: scale(0.92); }
+  50% { opacity: 0.68; transform: scale(1.1); }
+}
+
+@keyframes cosmic-orbit-clockwise {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+@keyframes cosmic-orbit-counter {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(-360deg); }
+}
+
+.cosmic-loader-glow {
+  animation: cosmic-breathe 3.2s ease-in-out infinite;
+}
+
+.cosmic-loader-core {
+  animation: cosmic-breathe 2.4s ease-in-out infinite;
+}
+
+.cosmic-loader-orbit-slow {
+  animation: cosmic-orbit-clockwise 7.5s linear infinite;
+}
+
+.cosmic-loader-orbit-medium {
+  animation: cosmic-orbit-counter 10s linear infinite;
+}
+
+.cosmic-loader-orbit-wide {
+  animation: cosmic-orbit-clockwise 12s linear infinite;
 }
 
 @keyframes nebula-drift {

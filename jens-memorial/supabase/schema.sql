@@ -35,6 +35,8 @@ create table if not exists public.tracks (
   artwork_url text,
   audio_public_id text,
   duration_seconds integer,
+  submitted_by_name text,
+  reason text,
   added_by uuid references auth.users(id) on delete set null,
   approved boolean not null default true,
   created_at timestamptz not null default now()
@@ -63,6 +65,8 @@ alter table public.tracks add column if not exists external_url text;
 alter table public.tracks add column if not exists artwork_url text;
 alter table public.tracks add column if not exists audio_public_id text;
 alter table public.tracks add column if not exists duration_seconds integer;
+alter table public.tracks add column if not exists submitted_by_name text;
+alter table public.tracks add column if not exists reason text;
 alter table public.tracks add column if not exists added_by uuid references auth.users(id) on delete set null;
 alter table public.tracks add column if not exists approved boolean not null default true;
 alter table public.tracks add column if not exists created_at timestamptz not null default now();

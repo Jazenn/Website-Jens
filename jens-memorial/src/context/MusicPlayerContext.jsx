@@ -32,12 +32,14 @@ export function MusicPlayerProvider({ children }) {
   const [isPlaying, setIsPlaying] = useState(false)
   const [progress, setProgress] = useState(0)
   const [duration, setDuration] = useState(0)
+  const [volume, setVolumeState] = useState(0.5)
   const [levels, setLevels] = useState(Array.from({ length: 16 }, () => 0.2))
 
   useEffect(() => {
     const audio = new Audio()
     audio.crossOrigin = 'anonymous'
     audio.preload = 'metadata'
+    audio.volume = 0.5
     audioRef.current = audio
 
     const handleTimeUpdate = () => setProgress(audio.currentTime || 0)
@@ -157,6 +159,12 @@ export function MusicPlayerProvider({ children }) {
     playlistRef.current = tracks.filter((track) => track.sourceType === 'audio')
   }
 
+  function setVolume(nextVolume) {
+    const normalizedVolume = Math.min(Math.max(Number(nextVolume), 0), 1)
+    if (audioRef.current) audioRef.current.volume = normalizedVolume
+    setVolumeState(normalizedVolume)
+  }
+
   async function playNext() {
     const playlist = playlistRef.current
 
@@ -178,9 +186,20 @@ export function MusicPlayerProvider({ children }) {
     await playTrack(nextTrack)
   }
 
+  async function playPrevious() {
+    const playlist = playlistRef.current
+
+    if (playlist.length === 0) return
+
+    const currentIndex = playlist.findIndex((track) => track.id === currentTrackRef.current?.id)
+    const previousTrack = currentIndex > 0 ? playlist[currentIndex - 1] : playlist[playlist.length - 1]
+
+    await playTrack(previousTrack)
+  }
+
   const value = useMemo(
-    () => ({ currentTrack, isPlaying, progress, duration, levels, playTrack, pause, toggle, seek, setPlaylist, playNext }),
-    [currentTrack, isPlaying, progress, duration, levels]
+    () => ({ currentTrack, isPlaying, progress, duration, volume, levels, playTrack, pause, toggle, seek, setPlaylist, playNext, playPrevious, setVolume }),
+    [currentTrack, isPlaying, progress, duration, volume, levels]
   )
 
   return <MusicPlayerContext.Provider value={value}>{children}</MusicPlayerContext.Provider>

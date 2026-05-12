@@ -7,12 +7,21 @@ import { Heart, Music, PenLine, Shield, UserRound, Volume2, VolumeX, X } from 'l
 import { useAmbientAudio } from '../context/AmbientAudioContext'
 import { useAuth } from '../context/AuthContext'
 import { useMusicPlayer } from '../context/MusicPlayerContext'
+import { JOURNEY_TRANSITION_KEY } from '../lib/journey'
 import { CORE_MEMORY_CANDLE_THRESHOLD, fetchMemories, fetchUserCandleIds, lightCandle, removeCandle } from '../lib/memories'
 
 const CUSTOM_MEMORIES_KEY = 'jens-custom-memories'
 const PULSING_MEMORIES_KEY = 'jens-pulsing-memory-ids'
 const LIT_CANDLES_KEY = 'jens-lit-candle-memory-ids'
 const MEMORY_TYPES = ['foto', 'video', 'quote', 'tekst']
+const REVEAL_STARS = Array.from({ length: 90 }, (_, index) => ({
+  id: index,
+  x: Math.random() * 100,
+  y: Math.random() * 100,
+  size: Math.random() * 2 + 0.5,
+  delay: Math.random() * 4,
+  duration: Math.random() * 3 + 2,
+}))
 const MEMORY_TYPE_COLORS = {
   foto: '#ffffff',
   video: '#997fff',
@@ -20,6 +29,7 @@ const MEMORY_TYPE_COLORS = {
   tekst: '#7dd3fc',
 }
 const CORE_MEMORY_COLOR = '#f59e0b'
+const CONSTELLATION_REVEAL_MIN_MS = 1700
 
 function getMemoryPosition(index, total) {
   const cluster = index % 4
@@ -155,6 +165,7 @@ export default function ConstellationPage() {
   const { currentTrack, isPlaying, levels, toggle: toggleMusic } = useMusicPlayer()
   const { user } = useAuth()
   const [remoteMemories, setRemoteMemories] = useState([])
+  const [revealReady, setRevealReady] = useState(() => sessionStorage.getItem(JOURNEY_TRANSITION_KEY) !== 'true')
   const [loadingMemories, setLoadingMemories] = useState(true)
   const [litCandleIds, setLitCandleIds] = useState(() => {
     try {
@@ -180,6 +191,24 @@ export default function ConstellationPage() {
   const pulsingMemoryIdsRef = useRef(pulsingMemoryIds)
   const memories = useMemo(() => createCustomMemories([...customMemories, ...remoteMemories]), [customMemories, remoteMemories])
   const graphData = useMemo(() => ({ nodes: memories, links: createLinks(memories) }), [memories])
+  const showRevealOverlay = !revealReady || loadingMemories
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      setRevealReady(true)
+    }, CONSTELLATION_REVEAL_MIN_MS)
+
+    return () => window.clearTimeout(timer)
+  }, [])
+
+  useEffect(() => {
+    if (showRevealOverlay) return
+
+    if (sessionStorage.getItem(JOURNEY_TRANSITION_KEY) === 'true') {
+      sessionStorage.removeItem(JOURNEY_TRANSITION_KEY)
+    }
+  }, [showRevealOverlay])
+
 
   useEffect(() => {
     pulsingMemoryIdsRef.current = pulsingMemoryIds
@@ -451,24 +480,24 @@ export default function ConstellationPage() {
       onPointerLeave={handlePointerUp}
     >
       <div
-        className="absolute inset-0 pointer-events-none"
+        className={`absolute inset-0 pointer-events-none transition-opacity duration-700 ${showRevealOverlay ? 'opacity-0' : 'opacity-100'}`}
         style={{
           background:
             'radial-gradient(circle at 50% 40%, rgba(124,58,237,0.18), transparent 35%), radial-gradient(circle at 20% 80%, rgba(167,139,250,0.12), transparent 30%), radial-gradient(ellipse at 70% 20%, rgba(245,158,11,0.08), transparent 28%), radial-gradient(ellipse at 15% 25%, rgba(245,158,11,0.08), transparent 32%), radial-gradient(ellipse at 80% 78%, rgba(124,58,237,0.1), transparent 34%)',
         }}
       />
-      <div ref={graphRef} className="absolute inset-0" />
+      <div ref={graphRef} className={`absolute inset-0 transition-opacity duration-700 ${showRevealOverlay ? 'opacity-0' : 'opacity-100'}`} />
 
       <button
         type="button"
         onClick={toggleSound}
-        className="absolute right-5 top-5 z-20 flex items-center gap-2 rounded-full border border-purple-300/20 bg-black/35 px-4 py-2 text-xs uppercase tracking-[0.22em] text-white/75 shadow-2xl backdrop-blur-md transition hover:border-purple-200/40 hover:text-white"
+        className={`absolute right-5 top-5 z-20 flex items-center gap-2 rounded-full border border-purple-300/20 bg-black/35 px-4 py-2 text-xs uppercase tracking-[0.22em] text-white/75 shadow-2xl backdrop-blur-md transition hover:border-purple-200/40 hover:text-white ${showRevealOverlay ? 'pointer-events-none opacity-0' : 'opacity-100'}`}
       >
         {soundEnabled ? <Volume2 size={15} /> : <VolumeX size={15} />}
         {soundEnabled ? 'Toon aan' : 'Toon uit'}
       </button>
 
-      <div className="pointer-events-none absolute left-6 top-6 z-10 max-w-sm">
+      <div className={`pointer-events-none absolute left-6 top-6 z-10 max-w-sm transition-opacity duration-700 ${showRevealOverlay ? 'opacity-0' : 'opacity-100'}`}>
         <motion.p
           initial={{ opacity: 0, y: 8 }}
           animate={{ opacity: 1, y: 0 }}
@@ -497,18 +526,52 @@ export default function ConstellationPage() {
         </motion.p>
       </div>
 
-      {loadingMemories && memories.length === 0 && (
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          className="absolute left-1/2 top-1/2 z-10 flex -translate-x-1/2 -translate-y-1/2 flex-col items-center gap-4 text-center"
-        >
-          <div className="h-2 w-2 rounded-full bg-purple-300 shadow-[0_0_28px_rgba(196,181,253,0.8)] animate-ping" />
-          <p className="text-xs uppercase tracking-[0.32em] text-white/35">Constellatie laden</p>
-        </motion.div>
-      )}
+      <AnimatePresence>
+        {showRevealOverlay && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.75, ease: 'easeInOut' }}
+            className="absolute inset-0 z-30 flex items-center justify-center overflow-hidden bg-[var(--cosmic-bg)]"
+          >
+            {REVEAL_STARS.map((star) => (
+              <motion.div
+                key={star.id}
+                className="absolute rounded-full"
+                style={{
+                  left: `${star.x}%`,
+                  top: `${star.y}%`,
+                  width: star.size,
+                  height: star.size,
+                  background: star.id % 8 === 0 ? 'var(--accent-gold)' : 'var(--accent-lilac)',
+                }}
+                animate={{ opacity: [0.15, 0.9, 0.15], scale: [1, 1.45, 1] }}
+                transition={{ duration: star.duration, delay: star.delay, repeat: Infinity, ease: 'easeInOut' }}
+              />
+            ))}
+            <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(153,127,255,0.2),transparent_34%),radial-gradient(circle_at_50%_80%,rgba(245,158,11,0.1),transparent_32%)]" />
+            <div className="relative z-10 flex items-center justify-center text-center">
+              <motion.div
+                initial={{ scale: 0.82, opacity: 0 }}
+                animate={{ scale: [0.82, 1.05, 1.22], opacity: [0, 0.92, 0.72] }}
+                transition={{ duration: 1.7, repeat: Infinity, repeatType: 'reverse', ease: 'easeInOut' }}
+                className="h-44 w-44 rounded-full border border-purple-200/30 bg-purple-200/10 shadow-[0_0_90px_rgba(196,181,253,0.32)]"
+              />
+              <motion.p
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 1, delay: 0.25 }}
+                className="absolute mt-64 text-xs uppercase tracking-[0.38em] text-white/45"
+              >
+                De sterren vormen zich
+              </motion.p>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
-      {!loadingMemories && memories.length === 0 && (
+      {!loadingMemories && memories.length === 0 && !showRevealOverlay && (
         <motion.div
           initial={{ opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
@@ -529,7 +592,7 @@ export default function ConstellationPage() {
         </motion.div>
       )}
 
-      <nav className="absolute bottom-5 left-1/2 z-20 flex -translate-x-1/2 items-center gap-2 rounded-full border border-purple-300/15 bg-black/30 px-3 py-2 shadow-2xl backdrop-blur-md">
+      <nav className={`absolute bottom-5 left-1/2 z-20 flex -translate-x-1/2 items-center gap-2 rounded-full border border-purple-300/15 bg-black/30 px-3 py-2 shadow-2xl backdrop-blur-md transition-opacity duration-700 ${showRevealOverlay ? 'pointer-events-none opacity-0' : 'opacity-100'}`}>
         <NavItem to="/add" label="Toevoegen" icon={<PenLine size={16} />} />
         <NavItem to="/music" label="Muziek" icon={<Music size={16} />} />
         <NavItem to="/about" label="Over" icon={<UserRound size={16} />} />

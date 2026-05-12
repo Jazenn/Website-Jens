@@ -18,6 +18,19 @@ function isAdminUser(authUser) {
   return authUser?.email?.toLowerCase() === adminEmail
 }
 
+async function notifyAccessRequest(authUser, name) {
+  try {
+    await supabase.functions.invoke('notify-access-request', {
+      body: {
+        email: authUser.email,
+        name,
+      },
+    })
+  } catch (error) {
+    console.error('notifyAccessRequest error:', error)
+  }
+}
+
 async function loadUserRecord(authUser) {
   try {
     const admin = isAdminUser(authUser)
@@ -61,6 +74,7 @@ async function loadUserRecord(authUser) {
     }
 
     await withTimeout(supabase.from('users').insert(newRecord), 'insert user record')
+    if (!admin) notifyAccessRequest(authUser, name)
 
     const { data: fresh } = await withTimeout(
       supabase

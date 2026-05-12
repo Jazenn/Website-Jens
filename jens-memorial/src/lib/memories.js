@@ -115,6 +115,26 @@ export async function deleteMemory(memoryId) {
   if (error) throw error
 }
 
+export async function updateMemory(memoryId, updates) {
+  const { data, error } = await supabase
+    .from('memories')
+    .update({
+      title: updates.title,
+      author: updates.author || null,
+      body: updates.body || null,
+    })
+    .eq('id', memoryId)
+    .select('*, memory_candles(id)')
+    .single()
+
+  if (error) throw error
+
+  return mapMemoryRecord({
+    ...data,
+    candle_count: data.memory_candles?.length ?? 0,
+  })
+}
+
 export async function updateMemoryCoreStatus(memoryId, isCoreMemory) {
   const { data, error } = await supabase
     .from('memories')

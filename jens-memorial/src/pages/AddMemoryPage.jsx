@@ -14,6 +14,13 @@ const MEMORY_TYPES = [
 ]
 const CUSTOM_MEMORIES_KEY = 'jens-custom-memories'
 const PULSING_MEMORIES_KEY = 'jens-pulsing-memory-ids'
+const MEMORY_FIELD_LIMITS = {
+  title: 100,
+  author: 60,
+  quote: 400,
+  body: 500,
+  text: 1200,
+}
 
 export default function AddMemoryPage() {
   const navigate = useNavigate()
@@ -30,6 +37,7 @@ export default function AddMemoryPage() {
   const selectedType = useMemo(() => MEMORY_TYPES.find((memoryType) => memoryType.id === type), [type])
   const previewUrl = useMemo(() => (file ? URL.createObjectURL(file) : null), [file])
   const needsFile = type === 'foto' || type === 'video'
+  const bodyLimit = type === 'tekst' ? MEMORY_FIELD_LIMITS.text : type === 'quote' ? MEMORY_FIELD_LIMITS.quote : MEMORY_FIELD_LIMITS.body
 
   useEffect(() => {
     return () => {
@@ -222,6 +230,7 @@ export default function AddMemoryPage() {
                 <span className="mb-2 block text-xs uppercase tracking-[0.22em] text-white/45">Titel (optioneel)</span>
                 <input
                   value={title}
+                  maxLength={MEMORY_FIELD_LIMITS.title}
                   onChange={(event) => setTitle(event.target.value)}
                   placeholder="Bijvoorbeeld: Zomeravond"
                   className="w-full rounded-2xl border border-white/10 bg-white/[0.06] px-4 py-3 text-sm text-white outline-none transition placeholder:text-white/25 focus:border-purple-200/45"
@@ -232,6 +241,7 @@ export default function AddMemoryPage() {
                 <span className="mb-2 block text-xs uppercase tracking-[0.22em] text-white/45">Van wie (optioneel)</span>
                 <input
                   value={author}
+                  maxLength={MEMORY_FIELD_LIMITS.author}
                   onChange={(event) => setAuthor(event.target.value)}
                   placeholder="Je naam"
                   className="w-full rounded-2xl border border-white/10 bg-white/[0.06] px-4 py-3 text-sm text-white outline-none transition placeholder:text-white/25 focus:border-purple-200/45"
@@ -278,11 +288,13 @@ export default function AddMemoryPage() {
             )}
 
             <label className="mt-4 block">
-              <span className="mb-2 block text-xs uppercase tracking-[0.22em] text-white/45">
-                {type === 'tekst' ? 'Herinnering verplicht' : type === 'quote' ? 'Quote optioneel' : 'Herinnering (optioneel)'}
+              <span className="mb-2 flex items-center justify-between text-xs uppercase tracking-[0.22em] text-white/45">
+                <span>{type === 'tekst' ? 'Herinnering verplicht' : type === 'quote' ? 'Quote optioneel' : 'Herinnering (optioneel)'}</span>
+                <span className="tracking-normal text-white/25">{body.length}/{bodyLimit}</span>
               </span>
               <textarea
                 value={body}
+                maxLength={bodyLimit}
                 onChange={(event) => setBody(event.target.value)}
                 placeholder={type === 'quote' ? '“Typ hier de quote...”' : 'Schrijf hier wat je wilt delen...'}
                 rows={6}

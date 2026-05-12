@@ -23,6 +23,8 @@ export function mapTrackRecord(record) {
     artworkUrl: record.artwork_url ?? '',
     audioPublicId: record.audio_public_id ?? '',
     durationSeconds: record.duration_seconds ?? null,
+    submittedByName: record.submitted_by_name ?? '',
+    reason: record.reason ?? '',
     addedBy: record.added_by ?? null,
     approved: record.approved ?? true,
     createdAt: record.created_at,
@@ -52,6 +54,8 @@ export async function createTrack(track, userId) {
       artwork_url: track.artworkUrl || null,
       audio_public_id: track.audioPublicId || null,
       duration_seconds: track.durationSeconds || null,
+      submitted_by_name: track.submittedByName || null,
+      reason: track.reason || null,
       added_by: userId,
       approved: true,
     })
@@ -69,4 +73,22 @@ export async function deleteTrack(trackId) {
     .eq('id', trackId)
 
   if (error) throw error
+}
+
+export async function updateTrack(trackId, updates) {
+  const { data, error } = await supabase
+    .from('tracks')
+    .update({
+      title: updates.title,
+      artist: updates.artist || null,
+      external_url: updates.externalUrl || null,
+      submitted_by_name: updates.submittedByName || null,
+      reason: updates.reason || null,
+    })
+    .eq('id', trackId)
+    .select('*')
+    .single()
+
+  if (error) throw error
+  return mapTrackRecord(data)
 }
