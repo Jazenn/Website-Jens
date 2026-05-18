@@ -18,12 +18,14 @@ export default function LoginPage() {
   const { user, isApproved } = useAuth()
   const [email, setEmail] = useState('')
   const [name, setName] = useState('')
-  const [step, setStep] = useState('idle') // idle | email | sent | loading | hyperspace
+  const [token, setToken] = useState('')
+  const [step, setStep] = useState('idle')
   const [error, setError] = useState('')
   const [showEmailForm, setShowEmailForm] = useState(false)
 
   useEffect(() => {
     if (user && isApproved) navigate('/intro', { replace: true })
+    if (user && !isApproved) navigate('/waiting', { replace: true })
   }, [user, isApproved, navigate])
 
   async function handleGoogleLogin() {
@@ -38,13 +40,14 @@ export default function LoginPage() {
   async function handleEmailSubmit(e) {
     e.preventDefault()
     setError('')
+    setToken('')
     setStep('loading')
 
     const { error } = await supabase.auth.signInWithOtp({
       email,
       options: {
         data: { name },
-        emailRedirectTo: window.location.origin,
+        shouldCreateUser: true,
       },
     })
 
@@ -52,6 +55,23 @@ export default function LoginPage() {
       setError(error.message)
       setStep('idle')
     } else {
+      setStep('sent')
+    }
+  }
+
+  async function handleTokenSubmit(e) {
+    e.preventDefault()
+    setError('')
+    setStep('loading')
+
+    const { error } = await supabase.auth.verifyOtp({
+      email,
+      token: token.replace(/\s/g, ''),
+      type: 'email',
+    })
+
+    if (error) {
+      setError(error.message)
       setStep('sent')
     }
   }
@@ -151,21 +171,59 @@ export default function LoginPage() {
         {/* Login opties */}
         <AnimatePresence mode="wait">
           {step === 'sent' ? (
-            <motion.div
+            <motion.form
               key="sent"
+              onSubmit={handleTokenSubmit}
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0 }}
-              className="text-center"
+              className="w-full flex flex-col gap-3 text-center"
             >
               <div className="text-2xl mb-4">✉️</div>
               <p className="text-sm mb-2" style={{ color: 'var(--text-primary)' }}>
                 Controleer je inbox
               </p>
-              <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
-                We hebben een link gestuurd naar <span className="opacity-80">{email}</span>
+              <p className="mb-2 text-xs leading-relaxed" style={{ color: 'var(--text-muted)' }}>
+                We hebben een code gestuurd naar <span className="opacity-80">{email}</span>. Vul die hier in om verder te gaan.
               </p>
-            </motion.div>
+              <input
+                type="text"
+                inputMode="numeric"
+                autoComplete="one-time-code"
+                placeholder="6-cijferige code"
+                value={token}
+                onChange={(e) => setToken(e.target.value)}
+                required
+                className="w-full px-4 py-3 text-center text-sm tracking-[0.3em] rounded-lg outline-none transition-all"
+                style={{
+                  background: 'rgba(255,255,255,0.05)',
+                  border: '1px solid rgba(167,139,250,0.25)',
+                  color: 'var(--text-primary)',
+                }}
+                onFocus={(e) => (e.target.style.borderColor = 'rgba(167,139,250,0.7)')}
+                onBlur={(e) => (e.target.style.borderColor = 'rgba(167,139,250,0.25)')}
+              />
+              <button
+                type="submit"
+                disabled={step === 'loading'}
+                className="w-full py-3 text-sm rounded-lg transition-all disabled:opacity-50"
+                style={{
+                  background: 'rgba(124,58,237,0.3)',
+                  border: '1px solid rgba(167,139,250,0.4)',
+                  color: 'var(--accent-lilac)',
+                }}
+              >
+                {step === 'loading' ? 'Controleren...' : 'Verdergaan'}
+              </button>
+              <button
+                type="button"
+                onClick={handleEmailSubmit}
+                className="text-xs opacity-40 hover:opacity-70 transition-opacity mt-1"
+                style={{ color: 'var(--text-muted)' }}
+              >
+                Nieuwe code sturen
+              </button>
+            </motion.form>
           ) : showEmailForm ? (
             <motion.form
               key="emailform"
@@ -215,7 +273,7 @@ export default function LoginPage() {
                   color: 'var(--accent-lilac)',
                 }}
               >
-                {step === 'loading' ? 'Verzenden...' : 'Stuur inloglink'}
+                {step === 'loading' ? 'Verzenden...' : 'Stuur code'}
               </button>
               <button
                 type="button"
@@ -256,7 +314,7 @@ export default function LoginPage() {
                   color: 'var(--text-muted)',
                 }}
               >
-                Inloggen met e-mail
+                Inloggen met e-mailcode
               </button>
             </motion.div>
           )}
