@@ -161,6 +161,7 @@ export default function ConstellationPage() {
   const pointerRef = useRef({ active: false, x: 0 })
   const passiveDirectionRef = useRef(1)
   const [selectedMemory, setSelectedMemory] = useState(null)
+  const [mobilePlayerOpen, setMobilePlayerOpen] = useState(false)
   const { enabled: soundEnabled, toggle: toggleSound } = useAmbientAudio()
   const { currentTrack, isPlaying, levels, toggle: toggleMusic, playNext, playPrevious } = useMusicPlayer()
   const { user } = useAuth()
@@ -491,17 +492,19 @@ export default function ConstellationPage() {
       <button
         type="button"
         onClick={toggleSound}
-        className={`absolute right-5 top-5 z-20 flex items-center gap-2 rounded-full border border-purple-300/20 bg-black/35 px-4 py-2 text-xs uppercase tracking-[0.22em] text-white/75 shadow-2xl backdrop-blur-md transition hover:border-purple-200/40 hover:text-white ${showRevealOverlay ? 'pointer-events-none opacity-0' : 'opacity-100'}`}
+        aria-label={soundEnabled ? 'Ambient geluid uitzetten' : 'Ambient geluid aanzetten'}
+        title={soundEnabled ? 'Ambient geluid uitzetten' : 'Ambient geluid aanzetten'}
+        className={`absolute right-5 top-5 z-20 flex items-center gap-2 rounded-full border border-purple-300/20 bg-black/35 px-3 py-3 text-xs uppercase tracking-[0.22em] text-white/75 shadow-2xl backdrop-blur-md transition hover:border-purple-200/40 hover:text-white sm:px-4 sm:py-2 ${showRevealOverlay ? 'pointer-events-none opacity-0' : 'opacity-100'}`}
       >
         {soundEnabled ? <Volume2 size={15} /> : <VolumeX size={15} />}
-        {soundEnabled ? 'Toon aan' : 'Toon uit'}
+        <span className="hidden sm:inline">Ambient</span>
       </button>
 
-      <div className={`pointer-events-none absolute left-6 top-6 z-10 max-w-sm transition-opacity duration-700 ${showRevealOverlay ? 'opacity-0' : 'opacity-100'}`}>
+      <div className={`pointer-events-none absolute left-5 top-6 z-10 max-w-[14rem] transition-opacity duration-700 sm:left-6 sm:max-w-sm ${showRevealOverlay ? 'opacity-0' : 'opacity-100'}`}>
         <motion.p
           initial={{ opacity: 0, y: 8 }}
           animate={{ opacity: 1, y: 0 }}
-          className="mb-3 text-xs uppercase tracking-[0.35em]"
+          className="mb-3 text-[0.65rem] uppercase tracking-[0.32em] sm:text-xs sm:tracking-[0.35em]"
           style={{ color: 'var(--text-muted)' }}
         >
           Voor Jens
@@ -510,7 +513,7 @@ export default function ConstellationPage() {
           initial={{ opacity: 0, y: 8 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.1 }}
-          className="text-3xl font-extralight tracking-[0.22em]"
+          className="text-2xl font-extralight tracking-[0.2em] sm:text-3xl sm:tracking-[0.22em]"
           style={{ color: 'var(--text-primary)' }}
         >
           Constellatie
@@ -519,7 +522,7 @@ export default function ConstellationPage() {
           initial={{ opacity: 0, y: 8 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.2 }}
-          className="mt-4 text-sm leading-relaxed"
+          className="mt-4 hidden text-sm leading-relaxed sm:block"
           style={{ color: 'var(--text-muted)' }}
         >
           Draai door de herinneringen. Klik op een ster om een moment te openen.
@@ -593,8 +596,8 @@ export default function ConstellationPage() {
       )}
 
       <nav
-        className={`absolute left-1/2 z-20 flex -translate-x-1/2 items-center gap-2 rounded-full border border-purple-300/15 bg-black/30 px-3 py-2 shadow-2xl backdrop-blur-md transition-opacity duration-700 ${showRevealOverlay ? 'pointer-events-none opacity-0' : 'opacity-100'}`}
-        style={{ bottom: 'max(1.25rem, calc(env(safe-area-inset-bottom) + 1rem))' }}
+        className={`fixed left-1/2 z-40 flex -translate-x-1/2 items-center gap-2 rounded-full border border-purple-300/15 bg-black/45 px-3 py-2 shadow-2xl backdrop-blur-md transition-opacity duration-700 ${showRevealOverlay ? 'pointer-events-none opacity-0' : 'opacity-100'}`}
+        style={{ bottom: 'max(2rem, calc(env(safe-area-inset-bottom, 0px) + 2rem))' }}
       >
         <NavItem to="/add" label="Toevoegen" icon={<PenLine size={16} />} />
         <NavItem to="/music" label="Muziek" icon={<Music size={16} />} />
@@ -603,7 +606,7 @@ export default function ConstellationPage() {
 
       {currentTrack && (
         <div
-          className="absolute right-4 z-20 w-[min(23rem,calc(100vw-2rem))] rounded-3xl border border-purple-200/15 bg-black/35 p-4 shadow-2xl backdrop-blur-md sm:right-5"
+          className="absolute right-4 z-20 hidden w-[min(23rem,calc(100vw-2rem))] rounded-3xl border border-purple-200/15 bg-black/35 p-4 shadow-2xl backdrop-blur-md sm:right-5 sm:block"
           style={{ bottom: 'max(6rem, calc(env(safe-area-inset-bottom) + 5.75rem))' }}
         >
           <div className="flex items-center gap-3">
@@ -647,6 +650,89 @@ export default function ConstellationPage() {
               </div>
             </div>
           </div>
+        </div>
+      )}
+
+      {currentTrack && (
+        <div
+          className={`fixed left-1/2 z-30 w-[min(21rem,calc(100vw-2rem))] -translate-x-1/2 transition-opacity duration-700 sm:hidden ${showRevealOverlay ? 'pointer-events-none opacity-0' : 'opacity-100'}`}
+          style={{ bottom: 'max(6.1rem, calc(env(safe-area-inset-bottom, 0px) + 6.1rem))' }}
+        >
+          {!mobilePlayerOpen ? (
+            <button
+              type="button"
+              onClick={() => setMobilePlayerOpen(true)}
+              className="relative flex w-full items-center gap-3 overflow-hidden rounded-full border border-purple-200/15 bg-black/45 px-3 py-2.5 text-left shadow-2xl backdrop-blur-md"
+            >
+              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-purple-200/20 bg-purple-200/10 text-white">
+                {isPlaying ? <Pause size={15} /> : <Music size={15} />}
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="block truncate text-xs text-white">{currentTrack.title}</span>
+                <span className="block truncate text-[0.65rem] text-white/40">{currentTrack.artist || 'Muziekspeler'}</span>
+              </span>
+              <span className="flex h-7 items-end gap-0.5">
+                {levels.slice(0, 6).map((level, index) => (
+                  <span
+                    key={index}
+                    className="w-0.5 rounded-full bg-purple-200"
+                    style={{ height: `${Math.max(level * 26, 5)}px`, opacity: 0.25 + level * 0.55 }}
+                  />
+                ))}
+              </span>
+            </button>
+          ) : (
+            <div className="rounded-[1.5rem] border border-purple-200/15 bg-black/60 p-4 shadow-2xl backdrop-blur-xl">
+              <div className="mb-3 flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="truncate text-sm text-white">{currentTrack.title}</p>
+                  <p className="truncate text-xs text-white/40">{currentTrack.artist || 'Muziekspeler'}</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setMobilePlayerOpen(false)}
+                  className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-white/10 text-white/60"
+                >
+                  <X size={14} />
+                </button>
+              </div>
+              <div className="mb-4 flex h-8 items-end justify-center gap-1">
+                {levels.slice(0, 18).map((level, index) => (
+                  <span
+                    key={index}
+                    className="w-1 rounded-full bg-purple-200"
+                    style={{ height: `${Math.max(level * 32, 6)}px`, opacity: 0.25 + level * 0.6 }}
+                  />
+                ))}
+              </div>
+              <div className="flex items-center justify-center gap-3">
+                <button
+                  type="button"
+                  onClick={playPrevious}
+                  disabled={currentTrack.sourceType !== 'audio'}
+                  className="flex h-11 w-11 items-center justify-center rounded-full border border-white/10 bg-white/5 text-white/75 disabled:opacity-40"
+                >
+                  <SkipBack size={17} />
+                </button>
+                <button
+                  type="button"
+                  onClick={toggleMusic}
+                  disabled={currentTrack.sourceType !== 'audio'}
+                  className="flex h-14 w-14 items-center justify-center rounded-full border border-purple-200/25 bg-purple-200/15 text-white disabled:opacity-40"
+                >
+                  {isPlaying ? <Pause size={20} /> : <Play size={20} className="ml-0.5" />}
+                </button>
+                <button
+                  type="button"
+                  onClick={playNext}
+                  disabled={currentTrack.sourceType !== 'audio'}
+                  className="flex h-11 w-11 items-center justify-center rounded-full border border-white/10 bg-white/5 text-white/75 disabled:opacity-40"
+                >
+                  <SkipForward size={17} />
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       )}
 

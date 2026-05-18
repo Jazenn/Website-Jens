@@ -62,10 +62,10 @@ function createAmbientPlayer() {
   return {
     play,
     duck() {
-      fadeTo(0, 4)
+      fadeTo(0, 0.8)
     },
     unduck() {
-      if (!manuallyStopped && !audio.paused) fadeTo(maxVolume, 4)
+      if (!manuallyStopped && !audio.paused) fadeTo(maxVolume, 2)
     },
     stop(reset = false) {
       manuallyStopped = true
