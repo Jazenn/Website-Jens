@@ -35,3 +35,19 @@ export async function updateUserAccess(userId, updates) {
   if (error) throw error
   return mapUser(data)
 }
+
+export async function createWhitelistedUser({ name, email }) {
+  const { data, error } = await supabase
+    .from('users')
+    .upsert({
+      email: email.toLowerCase(),
+      name,
+      approved: true,
+      is_admin: false,
+    }, { onConflict: 'email' })
+    .select('*')
+    .single()
+
+  if (error) throw error
+  return mapUser(data)
+}

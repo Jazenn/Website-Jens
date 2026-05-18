@@ -157,6 +157,18 @@ create policy "Admins can update users"
     )
   );
 
+drop policy if exists "Admins can create users" on public.users;
+create policy "Admins can create users"
+  on public.users for insert
+  to authenticated
+  with check (
+    exists (
+      select 1 from public.users admin_users
+      where admin_users.email = auth.jwt() ->> 'email'
+      and admin_users.is_admin = true
+    )
+  );
+
 drop policy if exists "Approved users can read memories" on public.memories;
 create policy "Approved users can read memories"
   on public.memories for select

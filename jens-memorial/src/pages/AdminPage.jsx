@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom'
 import { ArrowLeft, Check, Edit3, ExternalLink, FileText, Flame, Image, Music, Quote, RefreshCw, Save, Shield, Star, Trash2, UserCheck, Video, X } from 'lucide-react'
 import { deleteMemory, fetchMemories, updateMemory, updateMemoryCoreStatus } from '../lib/memories'
 import { deleteTrack, fetchTracks, updateTrack } from '../lib/tracks'
-import { fetchUsers, updateUserAccess } from '../lib/users'
+import { createWhitelistedUser, fetchUsers, updateUserAccess } from '../lib/users'
 
 const TABS = [
   { id: 'foto', label: "Foto's", icon: Image },
@@ -48,6 +48,7 @@ export default function AdminPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [busyId, setBusyId] = useState(null)
+  const [whitelistForm, setWhitelistForm] = useState({ name: '', email: '' })
 
   const groupedMemories = useMemo(
     () => ({
@@ -159,6 +160,28 @@ export default function AdminPage() {
     }
   }
 
+  async function handleCreateWhitelistedUser(event) {
+    event.preventDefault()
+    if (!whitelistForm.email.trim()) return
+
+    try {
+      setBusyId('whitelist')
+      const createdUser = await createWhitelistedUser({
+        name: whitelistForm.name.trim(),
+        email: whitelistForm.email.trim(),
+      })
+      setUsers((currentUsers) => {
+        const withoutDuplicate = currentUsers.filter((item) => item.id !== createdUser.id && item.email !== createdUser.email)
+        return [createdUser, ...withoutDuplicate]
+      })
+      setWhitelistForm({ name: '', email: '' })
+    } catch (createError) {
+      setError(createError.message || 'Whitelist toevoegen is mislukt.')
+    } finally {
+      setBusyId(null)
+    }
+  }
+
   const activeItems = activeTab === 'music' ? sortedTracks : activeTab === 'requests' ? pendingUsers : groupedMemories[activeTab]
 
   return (
@@ -239,6 +262,9 @@ export default function AdminPage() {
               pendingUsers={pendingUsers}
               approvedUsers={approvedUsers}
               busyId={busyId}
+              whitelistForm={whitelistForm}
+              onWhitelistFormChange={setWhitelistForm}
+              onCreateWhitelistedUser={handleCreateWhitelistedUser}
               onUpdateUserAccess={handleUpdateUserAccess}
             />
           ) : activeItems.length === 0 ? (
@@ -389,9 +415,38 @@ function MemoryAdminCard({ memory, busy, onDelete, onUpdate, onToggleCore }) {
   )
 }
 
-function AccessRequestsPanel({ pendingUsers, approvedUsers, busyId, onUpdateUserAccess }) {
+function AccessRequestsPanel({ pendingUsers, approvedUsers, busyId, whitelistForm, onWhitelistFormChange, onCreateWhitelistedUser, onUpdateUserAccess }) {
   return (
     <div className="grid gap-8">
+      <section className="rounded-3xl border border-purple-200/15 bg-purple-200/[0.06] p-5">
+        <h2 className="text-xl font-light text-white">Vooraf toegang geven</h2>
+        <p className="mt-1 text-sm text-white/45">Whitelist een e-mailadres zodat deze persoon na e-mailverificatie meteen naar de site kan.</p>
+        <form onSubmit={onCreateWhitelistedUser} className="mt-4 grid gap-3 sm:grid-cols-[1fr_1fr_auto]">
+          <input
+            value={whitelistForm.name}
+            onChange={(event) => onWhitelistFormChange({ ...whitelistForm, name: event.target.value })}
+            className="rounded-2xl border border-white/10 bg-white/[0.06] px-4 py-3 text-sm text-white outline-none focus:border-purple-200/45"
+            placeholder="Naam optioneel"
+          />
+          <input
+            type="email"
+            value={whitelistForm.email}
+            onChange={(event) => onWhitelistFormChange({ ...whitelistForm, email: event.target.value })}
+            required
+            className="rounded-2xl border border-white/10 bg-white/[0.06] px-4 py-3 text-sm text-white outline-none focus:border-purple-200/45"
+            placeholder="email@example.com"
+          />
+          <button
+            type="submit"
+            disabled={busyId === 'whitelist'}
+            className="inline-flex items-center justify-center gap-2 rounded-2xl border border-emerald-200/20 px-4 py-3 text-xs text-emerald-100 transition hover:bg-emerald-300/10 disabled:opacity-50"
+          >
+            <Check size={14} />
+            Whitelist
+          </button>
+        </form>
+      </section>
+
       <section>
         <div className="mb-4 flex items-center justify-between gap-3">
           <div>
