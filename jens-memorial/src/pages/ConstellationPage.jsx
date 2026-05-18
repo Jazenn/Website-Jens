@@ -662,23 +662,25 @@ export default function ConstellationPage() {
             <button
               type="button"
               onClick={() => setMobilePlayerOpen(true)}
-              className="relative -mr-3 flex h-14 w-16 items-center justify-start overflow-hidden rounded-l-full border border-r-0 border-purple-200/15 bg-black/50 pl-3 text-white shadow-2xl backdrop-blur-md"
+              className="relative -mr-3 flex h-14 w-16 items-center justify-start overflow-hidden rounded-l-full border border-r-0 border-purple-200/15 bg-black/50 pl-2 text-white shadow-2xl backdrop-blur-md"
             >
-              <span className="absolute inset-y-2 left-2 right-2 flex items-end justify-center gap-0.5 opacity-55">
-                {levels.slice(0, 5).map((level, index) => (
+              <span className="relative block h-11 w-11 rounded-full border border-purple-200/15 bg-purple-200/[0.04] shadow-[0_0_22px_rgba(196,181,253,0.18)]">
+                <span className="absolute left-1/2 top-1/2 h-2 w-2 -translate-x-1/2 -translate-y-1/2 rounded-full bg-purple-200/45" />
+                {levels.slice(0, 8).map((level, index) => (
                   <span
                     key={index}
-                    className="w-0.5 rounded-full bg-purple-200"
-                    style={{ height: `${Math.max(level * 28, 6)}px`, opacity: 0.2 + level * 0.6 }}
+                    className="absolute left-1/2 top-1/2 h-1.5 w-1.5 rounded-full bg-purple-200"
+                    style={{
+                      transform: `translate(-50%, -50%) rotate(${index * 45}deg) translateY(-${14 + level * 5}px)`,
+                      opacity: 0.22 + level * 0.68,
+                      boxShadow: `0 0 ${4 + level * 10}px rgba(196,181,253,${0.25 + level * 0.4})`,
+                    }}
                   />
                 ))}
               </span>
-              <span className="relative flex h-10 w-10 items-center justify-center rounded-full border border-purple-200/20 bg-purple-200/10">
-                {isPlaying ? <Pause size={15} /> : <Music size={15} />}
-              </span>
             </button>
           ) : (
-            <div className="mr-3 overflow-hidden rounded-full border border-purple-200/15 bg-black/60 px-3 py-2.5 shadow-2xl backdrop-blur-xl">
+            <div className="overflow-hidden rounded-l-full border border-r-0 border-purple-200/15 bg-black/60 px-3 py-2.5 pr-4 shadow-2xl backdrop-blur-xl">
               <div className="flex items-center gap-2.5">
                 <button
                   type="button"
