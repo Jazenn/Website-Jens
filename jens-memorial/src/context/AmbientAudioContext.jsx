@@ -74,6 +74,16 @@ function createAmbientPlayer() {
         if (reset) audio.currentTime = 0
       })
     },
+    pauseForBackground() {
+      if (fadeFrame) cancelAnimationFrame(fadeFrame)
+      fadeFrame = null
+      audio.pause()
+    },
+    async resumeFromBackground() {
+      if (manuallyStopped) return
+      await audio.play()
+      fadeTo(maxVolume, 1.2)
+    },
     destroy() {
       manuallyStopped = true
       if (fadeFrame) cancelAnimationFrame(fadeFrame)
@@ -175,6 +185,32 @@ export function AmbientAudioProvider({ children }) {
       document.removeEventListener('ended', handleVideoEnd, true)
     }
   }, [])
+
+  useEffect(() => {
+    let shouldResume = false
+
+    const handleVisibilityChange = () => {
+      if (document.hidden) {
+        shouldResume = enabled
+        playerRef.current?.pauseForBackground()
+        return
+      }
+
+      if (!shouldResume || !enabled) return
+
+      playerRef.current?.resumeFromBackground().catch((error) => {
+        console.error('Kon achtergrondmuziek niet hervatten:', error)
+        setBlocked(true)
+      })
+      shouldResume = false
+    }
+
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
+    }
+  }, [enabled])
 
   useEffect(() => {
     return () => {

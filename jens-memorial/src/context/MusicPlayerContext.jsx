@@ -107,6 +107,40 @@ export function MusicPlayerProvider({ children }) {
     }
   }, [isPlaying])
 
+  useEffect(() => {
+    let shouldResume = false
+
+    const handleVisibilityChange = () => {
+      const audio = audioRef.current
+      if (!audio) return
+
+      if (document.hidden) {
+        shouldResume = !audio.paused && currentTrackRef.current?.sourceType === 'audio'
+        audio.pause()
+        setIsPlaying(false)
+        return
+      }
+
+      if (!shouldResume || currentTrackRef.current?.sourceType !== 'audio') return
+
+      audio.play()
+        .then(() => {
+          setIsPlaying(true)
+          ambientAudioRef.current.duck()
+        })
+        .catch((error) => {
+          console.error('Kon muziek niet hervatten:', error)
+        })
+      shouldResume = false
+    }
+
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
+    }
+  }, [])
+
   async function playTrack(track) {
     if (!track) return
 

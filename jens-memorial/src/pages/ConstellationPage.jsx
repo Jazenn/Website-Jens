@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom'
 import ForceGraph3D from '3d-force-graph'
 import * as THREE from 'three'
 import { AnimatePresence, motion } from 'framer-motion'
-import { Heart, Music, PenLine, Shield, Volume2, VolumeX, X } from 'lucide-react'
+import { Heart, Music, Pause, PenLine, Play, SkipBack, SkipForward, Shield, Volume2, VolumeX, X } from 'lucide-react'
 import { useAmbientAudio } from '../context/AmbientAudioContext'
 import { useAuth } from '../context/AuthContext'
 import { useMusicPlayer } from '../context/MusicPlayerContext'
@@ -162,7 +162,7 @@ export default function ConstellationPage() {
   const passiveDirectionRef = useRef(1)
   const [selectedMemory, setSelectedMemory] = useState(null)
   const { enabled: soundEnabled, toggle: toggleSound } = useAmbientAudio()
-  const { currentTrack, isPlaying, levels, toggle: toggleMusic } = useMusicPlayer()
+  const { currentTrack, isPlaying, levels, toggle: toggleMusic, playNext, playPrevious } = useMusicPlayer()
   const { user } = useAuth()
   const [remoteMemories, setRemoteMemories] = useState([])
   const [revealReady, setRevealReady] = useState(() => sessionStorage.getItem(JOURNEY_TRANSITION_KEY) !== 'true')
@@ -592,22 +592,44 @@ export default function ConstellationPage() {
         </motion.div>
       )}
 
-      <nav className={`absolute bottom-5 left-1/2 z-20 flex -translate-x-1/2 items-center gap-2 rounded-full border border-purple-300/15 bg-black/30 px-3 py-2 shadow-2xl backdrop-blur-md transition-opacity duration-700 ${showRevealOverlay ? 'pointer-events-none opacity-0' : 'opacity-100'}`}>
+      <nav
+        className={`absolute left-1/2 z-20 flex -translate-x-1/2 items-center gap-2 rounded-full border border-purple-300/15 bg-black/30 px-3 py-2 shadow-2xl backdrop-blur-md transition-opacity duration-700 ${showRevealOverlay ? 'pointer-events-none opacity-0' : 'opacity-100'}`}
+        style={{ bottom: 'max(1.25rem, calc(env(safe-area-inset-bottom) + 1rem))' }}
+      >
         <NavItem to="/add" label="Toevoegen" icon={<PenLine size={16} />} />
         <NavItem to="/music" label="Muziek" icon={<Music size={16} />} />
         <NavItem to="/admin" label="Admin" icon={<Shield size={16} />} />
       </nav>
 
       {currentTrack && (
-        <div className="absolute bottom-24 right-5 z-20 w-[min(22rem,calc(100vw-2.5rem))] rounded-3xl border border-purple-200/15 bg-black/35 p-4 shadow-2xl backdrop-blur-md">
-          <div className="flex items-center gap-4">
+        <div
+          className="absolute right-4 z-20 w-[min(23rem,calc(100vw-2rem))] rounded-3xl border border-purple-200/15 bg-black/35 p-4 shadow-2xl backdrop-blur-md sm:right-5"
+          style={{ bottom: 'max(6rem, calc(env(safe-area-inset-bottom) + 5.75rem))' }}
+        >
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={playPrevious}
+              disabled={currentTrack.sourceType !== 'audio'}
+              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-white/10 bg-white/5 text-white/75 transition hover:bg-white/10 disabled:opacity-40"
+            >
+              <SkipBack size={16} />
+            </button>
             <button
               type="button"
               onClick={toggleMusic}
               disabled={currentTrack.sourceType !== 'audio'}
-              className="flex h-11 w-11 items-center justify-center rounded-full border border-white/10 bg-white/5 text-white/75 transition hover:bg-white/10 disabled:opacity-40"
+              className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full border border-purple-200/25 bg-purple-200/15 text-white transition hover:bg-purple-200/25 disabled:opacity-40"
             >
-              {isPlaying ? <Volume2 size={17} /> : <Music size={17} />}
+              {isPlaying ? <Pause size={18} /> : <Play size={18} className="ml-0.5" />}
+            </button>
+            <button
+              type="button"
+              onClick={playNext}
+              disabled={currentTrack.sourceType !== 'audio'}
+              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-white/10 bg-white/5 text-white/75 transition hover:bg-white/10 disabled:opacity-40"
+            >
+              <SkipForward size={16} />
             </button>
             <div className="min-w-0 flex-1">
               <p className="truncate text-sm text-white">{currentTrack.title}</p>
