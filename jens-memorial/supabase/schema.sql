@@ -1,3 +1,12 @@
+create table if not exists public.users (
+  id uuid primary key default gen_random_uuid(),
+  email text not null unique,
+  name text,
+  approved boolean not null default false,
+  is_admin boolean not null default false,
+  created_at timestamptz not null default now()
+);
+
 create table if not exists public.memories (
   id uuid primary key default gen_random_uuid(),
   type text not null check (type in ('foto', 'video', 'quote', 'tekst')),
@@ -70,6 +79,11 @@ alter table public.tracks add column if not exists reason text;
 alter table public.tracks add column if not exists added_by uuid references auth.users(id) on delete set null;
 alter table public.tracks add column if not exists approved boolean not null default true;
 alter table public.tracks add column if not exists created_at timestamptz not null default now();
+alter table public.users add column if not exists email text;
+alter table public.users add column if not exists name text;
+alter table public.users add column if not exists approved boolean not null default false;
+alter table public.users add column if not exists is_admin boolean not null default false;
+alter table public.users add column if not exists created_at timestamptz not null default now();
 
 do $$
 begin
@@ -98,6 +112,50 @@ alter table public.tracks
 alter table public.memories enable row level security;
 alter table public.memory_candles enable row level security;
 alter table public.tracks enable row level security;
+alter table public.users enable row level security;
+
+drop policy if exists "Users can read their own access record" on public.users;
+create policy "Users can read their own access record"
+  on public.users for select
+  to authenticated
+  using (email = auth.jwt() ->> 'email');
+
+drop policy if exists "Users can create their own access record" on public.users;
+create policy "Users can create their own access record"
+  on public.users for insert
+  to authenticated
+  with check (email = auth.jwt() ->> 'email');
+
+drop policy if exists "Admins can read users" on public.users;
+create policy "Admins can read users"
+  on public.users for select
+  to authenticated
+  using (
+    exists (
+      select 1 from public.users admin_users
+      where admin_users.email = auth.jwt() ->> 'email'
+      and admin_users.is_admin = true
+    )
+  );
+
+drop policy if exists "Admins can update users" on public.users;
+create policy "Admins can update users"
+  on public.users for update
+  to authenticated
+  using (
+    exists (
+      select 1 from public.users admin_users
+      where admin_users.email = auth.jwt() ->> 'email'
+      and admin_users.is_admin = true
+    )
+  )
+  with check (
+    exists (
+      select 1 from public.users admin_users
+      where admin_users.email = auth.jwt() ->> 'email'
+      and admin_users.is_admin = true
+    )
+  );
 
 drop policy if exists "Approved users can read memories" on public.memories;
 create policy "Approved users can read memories"

@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { ArrowLeft, Edit3, ExternalLink, FileText, Flame, Image, Music, Quote, RefreshCw, Save, Star, Trash2, Video, X } from 'lucide-react'
+import { ArrowLeft, Check, Edit3, ExternalLink, FileText, Flame, Image, Music, Quote, RefreshCw, Save, Shield, Star, Trash2, UserCheck, Video, X } from 'lucide-react'
 import { deleteMemory, fetchMemories, updateMemory, updateMemoryCoreStatus } from '../lib/memories'
 import { deleteTrack, fetchTracks, updateTrack } from '../lib/tracks'
+import { fetchUsers, updateUserAccess } from '../lib/users'
 
 const TABS = [
   { id: 'foto', label: "Foto's", icon: Image },
@@ -10,6 +11,7 @@ const TABS = [
   { id: 'quote', label: 'Quotes', icon: Quote },
   { id: 'tekst', label: 'Teksten', icon: FileText },
   { id: 'music', label: 'Muziek', icon: Music },
+  { id: 'requests', label: 'Aanvragen', icon: UserCheck },
 ]
 
 const TYPE_ICONS = {
@@ -42,6 +44,7 @@ export default function AdminPage() {
   const [activeTab, setActiveTab] = useState('foto')
   const [memories, setMemories] = useState([])
   const [tracks, setTracks] = useState([])
+  const [users, setUsers] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [busyId, setBusyId] = useState(null)
@@ -56,14 +59,17 @@ export default function AdminPage() {
     [memories]
   )
   const sortedTracks = useMemo(() => sortNewestFirst(tracks), [tracks])
+  const pendingUsers = useMemo(() => sortNewestFirst(users.filter((user) => !user.approved && !user.isAdmin)), [users])
+  const approvedUsers = useMemo(() => sortNewestFirst(users.filter((user) => user.approved && !user.isAdmin)), [users])
 
   async function loadAdminContent() {
     try {
       setLoading(true)
       setError('')
-      const [loadedMemories, loadedTracks] = await Promise.all([fetchMemories(), fetchTracks()])
+      const [loadedMemories, loadedTracks, loadedUsers] = await Promise.all([fetchMemories(), fetchTracks(), fetchUsers()])
       setMemories(loadedMemories)
       setTracks(loadedTracks)
+      setUsers(loadedUsers)
     } catch (loadError) {
       setError(loadError.message || 'Kon admin content niet laden.')
     } finally {
@@ -141,7 +147,19 @@ export default function AdminPage() {
     }
   }
 
-  const activeItems = activeTab === 'music' ? sortedTracks : groupedMemories[activeTab]
+  async function handleUpdateUserAccess(user, updates) {
+    try {
+      setBusyId(user.id)
+      const updatedUser = await updateUserAccess(user.id, { isAdmin: user.isAdmin, ...updates })
+      setUsers((currentUsers) => currentUsers.map((item) => (item.id === user.id ? updatedUser : item)))
+    } catch (updateError) {
+      setError(updateError.message || 'Toegang aanpassen is mislukt.')
+    } finally {
+      setBusyId(null)
+    }
+  }
+
+  const activeItems = activeTab === 'music' ? sortedTracks : activeTab === 'requests' ? pendingUsers : groupedMemories[activeTab]
 
   return (
     <div className="relative min-h-screen overflow-hidden px-5 py-6" style={{ background: 'var(--cosmic-bg)' }}>
@@ -191,7 +209,7 @@ export default function AdminPage() {
         <div className="mb-5 flex flex-wrap gap-2">
           {TABS.map((tab) => {
             const Icon = tab.icon
-            const count = tab.id === 'music' ? sortedTracks.length : groupedMemories[tab.id].length
+            const count = tab.id === 'music' ? sortedTracks.length : tab.id === 'requests' ? pendingUsers.length : groupedMemories[tab.id].length
             const active = activeTab === tab.id
 
             return (
@@ -216,6 +234,13 @@ export default function AdminPage() {
         <div className="rounded-[2rem] border border-white/10 bg-black/30 p-4 shadow-2xl backdrop-blur-xl sm:p-6">
           {loading ? (
             <div className="flex min-h-48 items-center justify-center text-sm text-white/45">Content laden...</div>
+          ) : activeTab === 'requests' ? (
+            <AccessRequestsPanel
+              pendingUsers={pendingUsers}
+              approvedUsers={approvedUsers}
+              busyId={busyId}
+              onUpdateUserAccess={handleUpdateUserAccess}
+            />
           ) : activeItems.length === 0 ? (
             <div className="flex min-h-48 items-center justify-center text-center text-sm text-white/45">
               Geen items in dit tabblad.
@@ -358,6 +383,111 @@ function MemoryAdminCard({ memory, busy, onDelete, onUpdate, onToggleCore }) {
         >
           <Trash2 size={14} />
           Verwijder
+        </button>
+      </div>
+    </article>
+  )
+}
+
+function AccessRequestsPanel({ pendingUsers, approvedUsers, busyId, onUpdateUserAccess }) {
+  return (
+    <div className="grid gap-8">
+      <section>
+        <div className="mb-4 flex items-center justify-between gap-3">
+          <div>
+            <h2 className="text-xl font-light text-white">Nieuwe aanvragen</h2>
+            <p className="mt-1 text-sm text-white/45">Mensen die hun e-mail hebben bevestigd en wachten op toegang.</p>
+          </div>
+          <span className="rounded-full border border-purple-200/20 bg-purple-200/10 px-3 py-1 text-xs text-purple-100">{pendingUsers.length}</span>
+        </div>
+
+        {pendingUsers.length === 0 ? (
+          <div className="rounded-3xl border border-white/10 bg-white/[0.04] p-5 text-sm text-white/45">Geen openstaande aanvragen.</div>
+        ) : (
+          <div className="grid gap-3">
+            {pendingUsers.map((user) => (
+              <UserAccessCard
+                key={user.id}
+                user={user}
+                busy={busyId === user.id}
+                primaryActionLabel="Goedkeuren"
+                primaryActionIcon={Check}
+                primaryActionClass="border-emerald-200/20 text-emerald-100 hover:bg-emerald-300/10"
+                onPrimaryAction={() => onUpdateUserAccess(user, { approved: true })}
+                onReject={() => onUpdateUserAccess(user, { approved: false, isAdmin: false })}
+              />
+            ))}
+          </div>
+        )}
+      </section>
+
+      <section>
+        <div className="mb-4 flex items-center justify-between gap-3">
+          <div>
+            <h2 className="text-xl font-light text-white">Goedgekeurde bezoekers</h2>
+            <p className="mt-1 text-sm text-white/45">Deze mensen hebben toegang tot de site.</p>
+          </div>
+          <span className="rounded-full border border-emerald-200/20 bg-emerald-200/10 px-3 py-1 text-xs text-emerald-100">{approvedUsers.length}</span>
+        </div>
+
+        {approvedUsers.length === 0 ? (
+          <div className="rounded-3xl border border-white/10 bg-white/[0.04] p-5 text-sm text-white/45">Nog geen goedgekeurde bezoekers.</div>
+        ) : (
+          <div className="grid gap-3">
+            {approvedUsers.map((user) => (
+              <UserAccessCard
+                key={user.id}
+                user={user}
+                busy={busyId === user.id}
+                primaryActionLabel="Maak admin"
+                primaryActionIcon={Shield}
+                primaryActionClass="border-purple-200/20 text-purple-100 hover:bg-purple-300/10"
+                onPrimaryAction={() => onUpdateUserAccess(user, { approved: true, isAdmin: true })}
+                onReject={() => onUpdateUserAccess(user, { approved: false, isAdmin: false })}
+              />
+            ))}
+          </div>
+        )}
+      </section>
+    </div>
+  )
+}
+
+function UserAccessCard({ user, busy, primaryActionLabel, primaryActionIcon: PrimaryIcon, primaryActionClass, onPrimaryAction, onReject }) {
+  return (
+    <article className="flex flex-col gap-4 rounded-3xl border border-white/10 bg-white/[0.04] p-4 sm:flex-row sm:items-center sm:justify-between">
+      <div>
+        <div className="mb-2 flex flex-wrap items-center gap-2">
+          <span className="rounded-full border border-white/10 px-3 py-1 text-[0.65rem] uppercase tracking-[0.18em] text-white/45">{formatDate(user.createdAt)}</span>
+          {user.isAdmin && (
+            <span className="inline-flex items-center gap-1 rounded-full border border-purple-200/25 bg-purple-300/10 px-3 py-1 text-[0.65rem] uppercase tracking-[0.18em] text-purple-100">
+              <Shield size={12} />
+              Admin
+            </span>
+          )}
+        </div>
+        <h3 className="text-lg font-light text-white">{user.name || 'Onbekend'}</h3>
+        <p className="mt-1 break-all text-sm text-white/45">{user.email}</p>
+      </div>
+
+      <div className="flex flex-wrap gap-2">
+        <button
+          type="button"
+          disabled={busy}
+          onClick={onPrimaryAction}
+          className={`inline-flex items-center gap-2 rounded-full border px-4 py-2 text-xs transition disabled:opacity-50 ${primaryActionClass}`}
+        >
+          <PrimaryIcon size={14} />
+          {primaryActionLabel}
+        </button>
+        <button
+          type="button"
+          disabled={busy}
+          onClick={onReject}
+          className="inline-flex items-center gap-2 rounded-full border border-rose-200/20 px-4 py-2 text-xs text-rose-100 transition hover:bg-rose-300/10 disabled:opacity-50"
+        >
+          <X size={14} />
+          Afwijzen
         </button>
       </div>
     </article>
