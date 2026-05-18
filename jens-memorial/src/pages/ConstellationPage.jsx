@@ -154,6 +154,55 @@ function createStarField(count, radius, color, size, opacity) {
   return new THREE.Points(geometry, material)
 }
 
+function WaveVisualizer({ levels, compact = false }) {
+  const waveLevels = levels.length ? levels : Array.from({ length: 16 }, () => 0.2)
+  const width = compact ? 68 : 130
+  const height = compact ? 52 : 44
+  const centerY = height / 2
+  const colors = ['#f59e0b', '#fb7185', '#c084fc', '#7dd3fc', '#ffffff']
+
+  function createPath(layer) {
+    const points = Array.from({ length: 9 }, (_, index) => {
+      const level = waveLevels[(index + layer * 2) % waveLevels.length] ?? 0.2
+      const x = (index / 8) * width
+      const direction = index % 2 === 0 ? -1 : 1
+      const amplitude = (compact ? 6 : 9) + level * (compact ? 11 : 15) + layer * 1.4
+      const y = centerY + direction * amplitude * Math.sin((index + layer * 0.9) * 0.9)
+      return `${index === 0 ? 'M' : 'L'} ${x.toFixed(1)} ${y.toFixed(1)}`
+    })
+
+    return points.join(' ')
+  }
+
+  return (
+    <svg viewBox={`0 0 ${width} ${height}`} className="h-full w-full overflow-visible" aria-hidden="true">
+      <defs>
+        <filter id={compact ? 'mobile-wave-glow-compact' : 'mobile-wave-glow'} x="-30%" y="-80%" width="160%" height="260%">
+          <feGaussianBlur stdDeviation="2.4" result="blur" />
+          <feMerge>
+            <feMergeNode in="blur" />
+            <feMergeNode in="SourceGraphic" />
+          </feMerge>
+        </filter>
+      </defs>
+      {colors.map((color, index) => (
+        <path
+          key={color}
+          d={createPath(index)}
+          fill="none"
+          stroke={color}
+          strokeWidth={compact ? 1.3 : 1.7}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          opacity={0.34 + index * 0.11}
+          filter={`url(#${compact ? 'mobile-wave-glow-compact' : 'mobile-wave-glow'})`}
+          style={{ transform: `translateY(${(index - 2) * (compact ? 1.6 : 1.9)}px)` }}
+        />
+      ))}
+    </svg>
+  )
+}
+
 export default function ConstellationPage() {
   const graphRef = useRef(null)
   const graphInstanceRef = useRef(null)
@@ -655,33 +704,21 @@ export default function ConstellationPage() {
 
       {currentTrack && (
         <div
-          className={`fixed right-0 z-30 transition-all duration-500 sm:hidden ${showRevealOverlay ? 'pointer-events-none opacity-0' : 'opacity-100'} ${mobilePlayerOpen ? 'w-[min(22rem,calc(100vw-1rem))]' : 'w-14'}`}
+          className={`fixed right-0 z-30 overflow-hidden transition-all duration-500 ease-out sm:hidden ${showRevealOverlay ? 'pointer-events-none opacity-0' : 'opacity-100'} ${mobilePlayerOpen ? 'w-[min(22rem,calc(100vw-1rem))]' : 'w-16'}`}
           style={{ bottom: 'clamp(9rem, calc(env(safe-area-inset-bottom, 0px) + 17svh), 13rem)' }}
         >
-          {!mobilePlayerOpen ? (
+          <div className="h-16 overflow-hidden rounded-l-full border border-r-0 border-purple-200/15 bg-black/60 shadow-2xl backdrop-blur-xl">
             <button
               type="button"
               onClick={() => setMobilePlayerOpen(true)}
-              className="relative -mr-3 flex h-14 w-16 items-center justify-start overflow-hidden rounded-l-full border border-r-0 border-purple-200/15 bg-black/50 pl-2 text-white shadow-2xl backdrop-blur-md"
+              className={`absolute left-0 top-0 flex h-16 w-16 items-center justify-center transition-opacity duration-300 ${mobilePlayerOpen ? 'pointer-events-none opacity-0' : 'opacity-100'}`}
             >
-              <span className="relative block h-11 w-11 rounded-full border border-purple-200/15 bg-purple-200/[0.04] shadow-[0_0_22px_rgba(196,181,253,0.18)]">
-                <span className="absolute left-1/2 top-1/2 h-2 w-2 -translate-x-1/2 -translate-y-1/2 rounded-full bg-purple-200/45" />
-                {levels.slice(0, 8).map((level, index) => (
-                  <span
-                    key={index}
-                    className="absolute left-1/2 top-1/2 h-1.5 w-1.5 rounded-full bg-purple-200"
-                    style={{
-                      transform: `translate(-50%, -50%) rotate(${index * 45}deg) translateY(-${14 + level * 5}px)`,
-                      opacity: 0.22 + level * 0.68,
-                      boxShadow: `0 0 ${4 + level * 10}px rgba(196,181,253,${0.25 + level * 0.4})`,
-                    }}
-                  />
-                ))}
+              <span className="h-12 w-14 overflow-hidden rounded-l-full">
+                <WaveVisualizer levels={levels} compact />
               </span>
             </button>
-          ) : (
-            <div className="overflow-hidden rounded-l-full border border-r-0 border-purple-200/15 bg-black/60 px-3 py-2.5 pr-4 shadow-2xl backdrop-blur-xl">
-              <div className="flex items-center gap-2.5">
+
+            <div className={`flex h-16 min-w-[min(22rem,calc(100vw-1rem))] items-center gap-2.5 px-3 pr-4 transition-all duration-300 ${mobilePlayerOpen ? 'translate-x-0 opacity-100' : 'translate-x-8 opacity-0'}`}>
                 <button
                   type="button"
                   onClick={playPrevious}
@@ -710,14 +747,8 @@ export default function ConstellationPage() {
                   <p className="truncate text-xs text-white">{currentTrack.title}</p>
                   <p className="truncate text-[0.65rem] text-white/40">{currentTrack.artist || 'Muziekspeler'}</p>
                 </div>
-                <div className="flex h-8 shrink-0 items-end gap-0.5">
-                  {levels.slice(0, 10).map((level, index) => (
-                    <span
-                      key={index}
-                      className="w-0.5 rounded-full bg-purple-200"
-                      style={{ height: `${Math.max(level * 30, 5)}px`, opacity: 0.22 + level * 0.62 }}
-                    />
-                  ))}
+                <div className="h-11 w-24 shrink-0 overflow-hidden">
+                  <WaveVisualizer levels={levels} />
                 </div>
                 <button
                   type="button"
@@ -726,9 +757,8 @@ export default function ConstellationPage() {
                 >
                   <X size={14} />
                 </button>
-              </div>
             </div>
-          )}
+          </div>
         </div>
       )}
 
