@@ -114,6 +114,34 @@ alter table public.memory_candles enable row level security;
 alter table public.tracks enable row level security;
 alter table public.users enable row level security;
 
+create or replace function public.is_current_user_admin()
+returns boolean
+language sql
+security definer
+set search_path = public
+as $$
+  select exists (
+    select 1
+    from public.users
+    where email = auth.jwt() ->> 'email'
+      and is_admin = true
+  );
+$$;
+
+create or replace function public.is_current_user_approved()
+returns boolean
+language sql
+security definer
+set search_path = public
+as $$
+  select exists (
+    select 1
+    from public.users
+    where email = auth.jwt() ->> 'email'
+      and approved = true
+  );
+$$;
+
 drop policy if exists "Users can read their own access record" on public.users;
 create policy "Users can read their own access record"
   on public.users for select
@@ -130,56 +158,26 @@ drop policy if exists "Admins can read users" on public.users;
 create policy "Admins can read users"
   on public.users for select
   to authenticated
-  using (
-    exists (
-      select 1 from public.users admin_users
-      where admin_users.email = auth.jwt() ->> 'email'
-      and admin_users.is_admin = true
-    )
-  );
+  using (public.is_current_user_admin());
 
 drop policy if exists "Admins can update users" on public.users;
 create policy "Admins can update users"
   on public.users for update
   to authenticated
-  using (
-    exists (
-      select 1 from public.users admin_users
-      where admin_users.email = auth.jwt() ->> 'email'
-      and admin_users.is_admin = true
-    )
-  )
-  with check (
-    exists (
-      select 1 from public.users admin_users
-      where admin_users.email = auth.jwt() ->> 'email'
-      and admin_users.is_admin = true
-    )
-  );
+  using (public.is_current_user_admin())
+  with check (public.is_current_user_admin());
 
 drop policy if exists "Admins can create users" on public.users;
 create policy "Admins can create users"
   on public.users for insert
   to authenticated
-  with check (
-    exists (
-      select 1 from public.users admin_users
-      where admin_users.email = auth.jwt() ->> 'email'
-      and admin_users.is_admin = true
-    )
-  );
+  with check (public.is_current_user_admin());
 
 drop policy if exists "Approved users can read memories" on public.memories;
 create policy "Approved users can read memories"
   on public.memories for select
   to authenticated
-  using (
-    exists (
-      select 1 from public.users
-      where users.email = auth.jwt() ->> 'email'
-      and users.approved = true
-    )
-  );
+  using (public.is_current_user_approved());
 
 drop policy if exists "Approved users can create memories" on public.memories;
 create policy "Approved users can create memories"
@@ -187,48 +185,26 @@ create policy "Approved users can create memories"
   to authenticated
   with check (
     created_by = auth.uid()
-    and exists (
-      select 1 from public.users
-      where users.email = auth.jwt() ->> 'email'
-      and users.approved = true
-    )
+    and public.is_current_user_approved()
   );
 
 drop policy if exists "Admins can update memories" on public.memories;
 create policy "Admins can update memories"
   on public.memories for update
   to authenticated
-  using (
-    exists (
-      select 1 from public.users
-      where users.email = auth.jwt() ->> 'email'
-      and users.is_admin = true
-    )
-  );
+  using (public.is_current_user_admin());
 
 drop policy if exists "Admins can delete memories" on public.memories;
 create policy "Admins can delete memories"
   on public.memories for delete
   to authenticated
-  using (
-    exists (
-      select 1 from public.users
-      where users.email = auth.jwt() ->> 'email'
-      and users.is_admin = true
-    )
-  );
+  using (public.is_current_user_admin());
 
 drop policy if exists "Approved users can read candles" on public.memory_candles;
 create policy "Approved users can read candles"
   on public.memory_candles for select
   to authenticated
-  using (
-    exists (
-      select 1 from public.users
-      where users.email = auth.jwt() ->> 'email'
-      and users.approved = true
-    )
-  );
+  using (public.is_current_user_approved());
 
 drop policy if exists "Users can read their own candles" on public.memory_candles;
 create policy "Users can read their own candles"
@@ -246,11 +222,7 @@ create policy "Approved users can light candles"
       select 1 from public.memories
       where memories.id = memory_id
     )
-    and exists (
-      select 1 from public.users
-      where users.email = auth.jwt() ->> 'email'
-      and users.approved = true
-    )
+    and public.is_current_user_approved()
   );
 
 drop policy if exists "Users can remove their own candles" on public.memory_candles;
@@ -265,11 +237,7 @@ create policy "Approved users can read tracks"
   to authenticated
   using (
     approved = true
-    and exists (
-      select 1 from public.users
-      where users.email = auth.jwt() ->> 'email'
-      and users.approved = true
-    )
+    and public.is_current_user_approved()
   );
 
 drop policy if exists "Approved users can create tracks" on public.tracks;
@@ -278,36 +246,20 @@ create policy "Approved users can create tracks"
   to authenticated
   with check (
     added_by = auth.uid()
-    and exists (
-      select 1 from public.users
-      where users.email = auth.jwt() ->> 'email'
-      and users.approved = true
-    )
+    and public.is_current_user_approved()
   );
 
 drop policy if exists "Admins can update tracks" on public.tracks;
 create policy "Admins can update tracks"
   on public.tracks for update
   to authenticated
-  using (
-    exists (
-      select 1 from public.users
-      where users.email = auth.jwt() ->> 'email'
-      and users.is_admin = true
-    )
-  );
+  using (public.is_current_user_admin());
 
 drop policy if exists "Admins can delete tracks" on public.tracks;
 create policy "Admins can delete tracks"
   on public.tracks for delete
   to authenticated
-  using (
-    exists (
-      select 1 from public.users
-      where users.email = auth.jwt() ->> 'email'
-      and users.is_admin = true
-    )
-  );
+  using (public.is_current_user_admin());
 
 create index if not exists memories_created_at_idx on public.memories (created_at desc);
 create index if not exists memory_candles_memory_id_idx on public.memory_candles (memory_id);
