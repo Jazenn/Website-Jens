@@ -154,78 +154,12 @@ function createStarField(count, radius, color, size, opacity) {
   return new THREE.Points(geometry, material)
 }
 
-function WaveVisualizer({ compact = false }) {
-  const width = compact ? 86 : 130
-  const height = compact ? 46 : 44
-  const colors = ['#fef3c7', '#f59e0b', '#fb7185', '#e879f9', '#7dd3fc']
-  const waveLength = compact ? 44 : 68
-  const pathWidth = waveLength * 4
-
-  function createFlowingPath(layer) {
-    const centerY = height / 2 + (layer - 2) * (compact ? 2.2 : 1.7)
-    const amplitude = (compact ? 7 : 8) + layer * (compact ? 1.2 : 1.4)
-    let path = `M 0 ${centerY.toFixed(1)}`
-
-    for (let x = 0; x < pathWidth; x += waveLength) {
-      path += ` C ${(x + waveLength * 0.25).toFixed(1)} ${(centerY - amplitude).toFixed(1)}, ${(x + waveLength * 0.25).toFixed(1)} ${(centerY - amplitude).toFixed(1)}, ${(x + waveLength * 0.5).toFixed(1)} ${centerY.toFixed(1)}`
-      path += ` C ${(x + waveLength * 0.75).toFixed(1)} ${(centerY + amplitude).toFixed(1)}, ${(x + waveLength * 0.75).toFixed(1)} ${(centerY + amplitude).toFixed(1)}, ${(x + waveLength).toFixed(1)} ${centerY.toFixed(1)}`
-    }
-
-    return path
-  }
-
-  return (
-    <svg viewBox={`0 0 ${width} ${height}`} className="h-full w-full overflow-visible" aria-hidden="true">
-      <defs>
-        <filter id={compact ? 'mobile-wave-glow-compact' : 'mobile-wave-glow'} x="-30%" y="-80%" width="160%" height="260%">
-          <feGaussianBlur stdDeviation="2.4" result="blur" />
-          <feMerge>
-            <feMergeNode in="blur" />
-            <feMergeNode in="SourceGraphic" />
-          </feMerge>
-        </filter>
-      </defs>
-      <g>
-        {colors.map((color, index) => (
-          <g key={color} transform={`translate(${-waveLength + index * 2.4} 0)`}>
-            <animateTransform
-              attributeName="transform"
-              type="translate"
-              from={`${-waveLength + index * 2.4} 0`}
-              to={`${-waveLength * 2 + index * 2.4} 0`}
-              dur={`${2.2 + index * 0.28}s`}
-              repeatCount="indefinite"
-            />
-            <path
-              d={createFlowingPath(index)}
-              fill="none"
-              stroke={color}
-              strokeWidth={compact ? 1.2 : 1.6}
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              opacity={0.38 + index * 0.1}
-              filter={`url(#${compact ? 'mobile-wave-glow-compact' : 'mobile-wave-glow'})`}
-            >
-              <animateTransform
-                attributeName="transform"
-                type="scale"
-                values={`1 0.86; 1 ${1.08 + index * 0.04}; 1 0.9`}
-                dur={`${2.8 + index * 0.35}s`}
-                repeatCount="indefinite"
-                additive="sum"
-              />
-            </path>
-          </g>
-        ))}
-      </g>
-    </svg>
-  )
-}
-
 export default function ConstellationPage() {
   const graphRef = useRef(null)
   const graphInstanceRef = useRef(null)
   const animationFrameRef = useRef(null)
+  const mobileWaveCanvasRef = useRef(null)
+  const levelsRef = useRef([])
   const pointerRef = useRef({ active: false, x: 0 })
   const passiveDirectionRef = useRef(1)
   const [selectedMemory, setSelectedMemory] = useState(null)
@@ -236,13 +170,82 @@ export default function ConstellationPage() {
   const [remoteMemories, setRemoteMemories] = useState([])
   const [revealReady, setRevealReady] = useState(() => sessionStorage.getItem(JOURNEY_TRANSITION_KEY) !== 'true')
   const [loadingMemories, setLoadingMemories] = useState(true)
-  const [litCandleIds, setLitCandleIds] = useState(() => {
-    try {
-      return JSON.parse(localStorage.getItem(LIT_CANDLES_KEY) ?? '[]')
-    } catch {
-      return []
+  const [loadError, setLoadError] = useState('')
+  const [litCandleIds, setLitCandleIds] = useState([])
+  const [visitedMemoryIds, setVisitedMemoryIds] = useState([])
+  const revealOverlayActive = sessionStorage.getItem(JOURNEY_TRANSITION_KEY) === 'true'
+
+  useEffect(() => {
+    levelsRef.current = levels
+  }, [levels])
+
+  useEffect(() => {
+    const canvas = mobileWaveCanvasRef.current
+    if (!canvas) return undefined
+
+    const context = canvas.getContext('2d')
+    const colors = ['#fef3c7', '#f59e0b', '#fb7185', '#e879f9', '#7dd3fc']
+    let frame = 0
+    let animationFrame = null
+
+    const resize = () => {
+      const rect = canvas.getBoundingClientRect()
+      const scale = window.devicePixelRatio || 1
+      canvas.width = rect.width * scale
+      canvas.height = rect.height * scale
+      context.setTransform(scale, 0, 0, scale, 0, 0)
     }
-  })
+
+    const draw = () => {
+      const { width, height } = canvas.getBoundingClientRect()
+      const audioEnergy = levelsRef.current.length
+        ? levelsRef.current.reduce((sum, level) => sum + level, 0) / levelsRef.current.length
+        : 0.22
+
+      context.clearRect(0, 0, width, height)
+      context.globalCompositeOperation = 'lighter'
+
+      colors.forEach((color, index) => {
+        const centerY = height * 0.5 + (index - 2) * 4
+        const amplitude = 7 + index * 1.4 + audioEnergy * 8
+        const frequency = 0.055 + index * 0.006
+        const speed = 0.11 + index * 0.018
+
+        context.beginPath()
+        for (let x = -12; x <= width + 12; x += 2) {
+          const y =
+            centerY +
+            Math.sin(x * frequency + frame * speed + index * 0.9) * amplitude +
+            Math.sin(x * frequency * 0.55 + frame * speed * 0.7 + index) * 2.2
+
+          if (x === -12) context.moveTo(x, y)
+          else context.lineTo(x, y)
+        }
+
+        context.strokeStyle = color
+        context.lineWidth = 1.2
+        context.shadowColor = color
+        context.shadowBlur = 7 + audioEnergy * 8
+        context.globalAlpha = 0.36 + index * 0.1
+        context.stroke()
+      })
+
+      context.globalAlpha = 1
+      context.globalCompositeOperation = 'source-over'
+      frame += 1
+      animationFrame = requestAnimationFrame(draw)
+    }
+
+    resize()
+    draw()
+    window.addEventListener('resize', resize)
+
+    return () => {
+      window.removeEventListener('resize', resize)
+      if (animationFrame) cancelAnimationFrame(animationFrame)
+    }
+  }, [])
+
   const [customMemories] = useState(() => {
     try {
       return JSON.parse(localStorage.getItem(CUSTOM_MEMORIES_KEY) ?? '[]')
@@ -733,7 +736,7 @@ export default function ConstellationPage() {
               className={`absolute left-0 top-0 flex h-16 w-16 items-center justify-center transition-opacity duration-300 ${mobilePlayerOpen ? 'pointer-events-none opacity-0' : 'opacity-100'}`}
             >
               <span className="h-16 w-16 overflow-hidden rounded-l-full">
-                <WaveVisualizer levels={levels} compact />
+                <canvas ref={mobileWaveCanvasRef} className="h-full w-full" aria-hidden="true" />
               </span>
             </button>
 
