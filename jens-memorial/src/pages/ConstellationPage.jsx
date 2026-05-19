@@ -229,8 +229,8 @@ export default function ConstellationPage() {
         const points = 96
         const bandEnergy = bands[index] ?? audioEnergy
         const layerRadius = baseRadius + index * 2 + pulse + bandEnergy * 3.2
-        const warp = 0.55 + bandEnergy * 2.9 + index * 0.18
-        const rotation = frame * (0.0022 + index * 0.00045)
+        const warp = 0.25 + bandEnergy * 1.15 + index * 0.08
+        const rotation = frame * (0.0016 + index * 0.00032)
 
         context.beginPath()
         for (let point = 0; point <= points; point += 1) {
@@ -238,9 +238,10 @@ export default function ConstellationPage() {
           const level = levelsRef.current[(point + index * 7) % Math.max(levelsRef.current.length, 1)] ?? audioEnergy
           const radius =
             layerRadius +
-            Math.sin(angle * 3 + rotation * 8 + index) * warp * 0.36 +
-            Math.sin(angle * 7 - rotation * 10 + index * 1.8) * warp * 0.13 +
-            level * (1.2 + index * 0.16)
+            Math.sin(angle * 9 + rotation * 10 + index) * warp * 0.34 +
+            Math.sin(angle * 14 - rotation * 12 + index * 1.8) * warp * 0.2 +
+            Math.sin(angle * 21 + rotation * 7 + index * 0.7) * warp * 0.12 +
+            level * (0.42 + index * 0.06)
           const x = centerX + Math.cos(angle + rotation) * radius
           const y = centerY + Math.sin(angle + rotation) * radius * 0.96
 
