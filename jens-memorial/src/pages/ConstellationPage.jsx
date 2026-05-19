@@ -201,10 +201,17 @@ export default function ConstellationPage() {
       const audioEnergy = levelsRef.current.length
         ? levelsRef.current.reduce((sum, level) => sum + level, 0) / levelsRef.current.length
         : 0.22
+      const bands = colors.map((_, index) => {
+        const bandSize = Math.max(1, Math.floor((levelsRef.current.length || 1) / colors.length))
+        const start = index * bandSize
+        const band = levelsRef.current.slice(start, start + bandSize)
+        if (!band.length) return audioEnergy
+        return band.reduce((sum, level) => sum + level, 0) / band.length
+      })
       const centerX = width * 0.43
       const centerY = height * 0.5
       const baseRadius = Math.min(width, height) * 0.22
-      const pulse = Math.sin(frame * 0.045) * 1.4
+      const pulse = Math.sin(frame * 0.026) * 0.55
 
       context.clearRect(0, 0, width, height)
       context.globalCompositeOperation = 'lighter'
@@ -215,14 +222,15 @@ export default function ConstellationPage() {
       coreGradient.addColorStop(1, 'rgba(125, 211, 252, 0)')
       context.fillStyle = coreGradient
       context.beginPath()
-      context.arc(centerX, centerY, baseRadius * 2.15 + audioEnergy * 7, 0, Math.PI * 2)
+      context.arc(centerX, centerY, baseRadius * 2.05 + audioEnergy * 3.5, 0, Math.PI * 2)
       context.fill()
 
       colors.forEach((color, index) => {
         const points = 96
-        const layerRadius = baseRadius + index * 1.7 + pulse
-        const warp = 2.2 + audioEnergy * 7 + index * 0.9
-        const rotation = frame * (0.006 + index * 0.0018)
+        const bandEnergy = bands[index] ?? audioEnergy
+        const layerRadius = baseRadius + index * 2 + pulse + bandEnergy * 3.2
+        const warp = 0.55 + bandEnergy * 2.9 + index * 0.18
+        const rotation = frame * (0.0022 + index * 0.00045)
 
         context.beginPath()
         for (let point = 0; point <= points; point += 1) {
@@ -230,9 +238,9 @@ export default function ConstellationPage() {
           const level = levelsRef.current[(point + index * 7) % Math.max(levelsRef.current.length, 1)] ?? audioEnergy
           const radius =
             layerRadius +
-            Math.sin(angle * 3 + rotation * 9 + index) * warp * 0.45 +
-            Math.sin(angle * 7 - rotation * 13 + index * 1.8) * warp * 0.22 +
-            level * (3.5 + index * 0.6)
+            Math.sin(angle * 3 + rotation * 8 + index) * warp * 0.36 +
+            Math.sin(angle * 7 - rotation * 10 + index * 1.8) * warp * 0.13 +
+            level * (1.2 + index * 0.16)
           const x = centerX + Math.cos(angle + rotation) * radius
           const y = centerY + Math.sin(angle + rotation) * radius * 0.96
 
@@ -244,16 +252,16 @@ export default function ConstellationPage() {
         context.strokeStyle = color
         context.lineWidth = 1.05
         context.shadowColor = color
-        context.shadowBlur = 7 + audioEnergy * 12
-        context.globalAlpha = 0.34 + index * 0.09
+        context.shadowBlur = 6 + bandEnergy * 8
+        context.globalAlpha = 0.32 + index * 0.08
         context.stroke()
       })
 
       context.beginPath()
-      context.arc(centerX, centerY, baseRadius * 0.34 + audioEnergy * 2, 0, Math.PI * 2)
-      context.fillStyle = `rgba(254, 243, 199, ${0.22 + audioEnergy * 0.24})`
+      context.arc(centerX, centerY, baseRadius * 0.34 + audioEnergy * 1.1, 0, Math.PI * 2)
+      context.fillStyle = `rgba(254, 243, 199, ${0.18 + audioEnergy * 0.18})`
       context.shadowColor = '#fef3c7'
-      context.shadowBlur = 12 + audioEnergy * 12
+      context.shadowBlur = 9 + audioEnergy * 8
       context.fill()
 
       context.globalAlpha = 1
