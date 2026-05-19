@@ -154,25 +154,13 @@ function createStarField(count, radius, color, size, opacity) {
   return new THREE.Points(geometry, material)
 }
 
-function WaveVisualizer({ levels, compact = false }) {
-  const waveLevels = levels.length ? levels : Array.from({ length: 16 }, () => 0.2)
-  const width = compact ? 68 : 130
-  const height = compact ? 52 : 44
-  const centerY = height / 2
-  const colors = ['#f59e0b', '#fb7185', '#c084fc', '#7dd3fc', '#ffffff']
-
-  function createPath(layer) {
-    const points = Array.from({ length: 9 }, (_, index) => {
-      const level = waveLevels[(index + layer * 2) % waveLevels.length] ?? 0.2
-      const x = (index / 8) * width
-      const direction = index % 2 === 0 ? -1 : 1
-      const amplitude = (compact ? 6 : 9) + level * (compact ? 11 : 15) + layer * 1.4
-      const y = centerY + direction * amplitude * Math.sin((index + layer * 0.9) * 0.9)
-      return `${index === 0 ? 'M' : 'L'} ${x.toFixed(1)} ${y.toFixed(1)}`
-    })
-
-    return points.join(' ')
-  }
+function WaveVisualizer({ compact = false }) {
+  const width = compact ? 86 : 130
+  const height = compact ? 46 : 44
+  const colors = ['#f59e0b', '#fb7185', '#e879f9', '#c084fc', '#fef3c7']
+  const basePath = compact
+    ? 'M -12 24 C 0 13, 13 13, 25 24 S 49 35, 61 24 S 85 13, 98 24'
+    : 'M -16 22 C 2 8, 21 8, 39 22 S 75 36, 93 22 S 129 8, 146 22'
 
   return (
     <svg viewBox={`0 0 ${width} ${height}`} className="h-full w-full overflow-visible" aria-hidden="true">
@@ -185,20 +173,26 @@ function WaveVisualizer({ levels, compact = false }) {
           </feMerge>
         </filter>
       </defs>
-      {colors.map((color, index) => (
-        <path
-          key={color}
-          d={createPath(index)}
-          fill="none"
-          stroke={color}
-          strokeWidth={compact ? 1.3 : 1.7}
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          opacity={0.34 + index * 0.11}
-          filter={`url(#${compact ? 'mobile-wave-glow-compact' : 'mobile-wave-glow'})`}
-          style={{ transform: `translateY(${(index - 2) * (compact ? 1.6 : 1.9)}px)` }}
-        />
-      ))}
+      <g>
+        <animateTransform attributeName="transform" type="translate" values="-5 0; 5 0; -5 0" dur="5s" repeatCount="indefinite" />
+        {colors.map((color, index) => (
+          <path
+            key={color}
+            d={basePath}
+            fill="none"
+            stroke={color}
+            strokeWidth={compact ? 1.15 : 1.6}
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            opacity={0.36 + index * 0.11}
+            filter={`url(#${compact ? 'mobile-wave-glow-compact' : 'mobile-wave-glow'})`}
+            style={{
+              transform: `translateY(${(index - 2) * (compact ? 1.7 : 1.9)}px) scaleY(${1 + index * 0.045})`,
+              transformOrigin: 'center',
+            }}
+          />
+        ))}
+      </g>
     </svg>
   )
 }
@@ -748,7 +742,15 @@ export default function ConstellationPage() {
                   <p className="truncate text-[0.65rem] text-white/40">{currentTrack.artist || 'Muziekspeler'}</p>
                 </div>
                 <div className="h-11 w-24 shrink-0 overflow-hidden">
-                  <WaveVisualizer levels={levels} />
+                  <div className="flex h-full items-end justify-end gap-0.5">
+                    {levels.slice(0, 16).map((level, index) => (
+                      <span
+                        key={index}
+                        className="w-0.5 rounded-full bg-purple-200"
+                        style={{ height: `${Math.max(level * 34, 6)}px`, opacity: 0.24 + level * 0.62 }}
+                      />
+                    ))}
+                  </div>
                 </div>
                 <button
                   type="button"
