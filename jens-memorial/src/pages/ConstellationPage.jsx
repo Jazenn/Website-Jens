@@ -157,10 +157,22 @@ function createStarField(count, radius, color, size, opacity) {
 function WaveVisualizer({ compact = false }) {
   const width = compact ? 86 : 130
   const height = compact ? 46 : 44
-  const colors = ['#f59e0b', '#fb7185', '#e879f9', '#c084fc', '#fef3c7']
-  const basePath = compact
-    ? 'M -12 24 C 0 13, 13 13, 25 24 S 49 35, 61 24 S 85 13, 98 24'
-    : 'M -16 22 C 2 8, 21 8, 39 22 S 75 36, 93 22 S 129 8, 146 22'
+  const colors = ['#fef3c7', '#f59e0b', '#fb7185', '#e879f9', '#7dd3fc']
+  const waveLength = compact ? 44 : 68
+  const pathWidth = waveLength * 4
+
+  function createFlowingPath(layer) {
+    const centerY = height / 2 + (layer - 2) * (compact ? 2.2 : 1.7)
+    const amplitude = (compact ? 7 : 8) + layer * (compact ? 1.2 : 1.4)
+    let path = `M 0 ${centerY.toFixed(1)}`
+
+    for (let x = 0; x < pathWidth; x += waveLength) {
+      path += ` C ${(x + waveLength * 0.25).toFixed(1)} ${(centerY - amplitude).toFixed(1)}, ${(x + waveLength * 0.25).toFixed(1)} ${(centerY - amplitude).toFixed(1)}, ${(x + waveLength * 0.5).toFixed(1)} ${centerY.toFixed(1)}`
+      path += ` C ${(x + waveLength * 0.75).toFixed(1)} ${(centerY + amplitude).toFixed(1)}, ${(x + waveLength * 0.75).toFixed(1)} ${(centerY + amplitude).toFixed(1)}, ${(x + waveLength).toFixed(1)} ${centerY.toFixed(1)}`
+    }
+
+    return path
+  }
 
   return (
     <svg viewBox={`0 0 ${width} ${height}`} className="h-full w-full overflow-visible" aria-hidden="true">
@@ -174,23 +186,36 @@ function WaveVisualizer({ compact = false }) {
         </filter>
       </defs>
       <g>
-        <animateTransform attributeName="transform" type="translate" values="-5 0; 5 0; -5 0" dur="5s" repeatCount="indefinite" />
         {colors.map((color, index) => (
-          <path
-            key={color}
-            d={basePath}
-            fill="none"
-            stroke={color}
-            strokeWidth={compact ? 1.15 : 1.6}
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            opacity={0.36 + index * 0.11}
-            filter={`url(#${compact ? 'mobile-wave-glow-compact' : 'mobile-wave-glow'})`}
-            style={{
-              transform: `translateY(${(index - 2) * (compact ? 1.7 : 1.9)}px) scaleY(${1 + index * 0.045})`,
-              transformOrigin: 'center',
-            }}
-          />
+          <g key={color} transform={`translate(${-waveLength + index * 2.4} 0)`}>
+            <animateTransform
+              attributeName="transform"
+              type="translate"
+              from={`${-waveLength + index * 2.4} 0`}
+              to={`${-waveLength * 2 + index * 2.4} 0`}
+              dur={`${2.2 + index * 0.28}s`}
+              repeatCount="indefinite"
+            />
+            <path
+              d={createFlowingPath(index)}
+              fill="none"
+              stroke={color}
+              strokeWidth={compact ? 1.2 : 1.6}
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              opacity={0.38 + index * 0.1}
+              filter={`url(#${compact ? 'mobile-wave-glow-compact' : 'mobile-wave-glow'})`}
+            >
+              <animateTransform
+                attributeName="transform"
+                type="scale"
+                values={`1 0.86; 1 ${1.08 + index * 0.04}; 1 0.9`}
+                dur={`${2.8 + index * 0.35}s`}
+                repeatCount="indefinite"
+                additive="sum"
+              />
+            </path>
+          </g>
         ))}
       </g>
     </svg>
@@ -707,7 +732,7 @@ export default function ConstellationPage() {
               onClick={() => setMobilePlayerOpen(true)}
               className={`absolute left-0 top-0 flex h-16 w-16 items-center justify-center transition-opacity duration-300 ${mobilePlayerOpen ? 'pointer-events-none opacity-0' : 'opacity-100'}`}
             >
-              <span className="h-12 w-14 overflow-hidden rounded-l-full">
+              <span className="h-16 w-16 overflow-hidden rounded-l-full">
                 <WaveVisualizer levels={levels} compact />
               </span>
             </button>
