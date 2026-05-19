@@ -201,34 +201,60 @@ export default function ConstellationPage() {
       const audioEnergy = levelsRef.current.length
         ? levelsRef.current.reduce((sum, level) => sum + level, 0) / levelsRef.current.length
         : 0.22
+      const centerX = width * 0.43
+      const centerY = height * 0.5
+      const baseRadius = Math.min(width, height) * 0.22
+      const pulse = Math.sin(frame * 0.045) * 1.4
 
       context.clearRect(0, 0, width, height)
       context.globalCompositeOperation = 'lighter'
 
+      const coreGradient = context.createRadialGradient(centerX, centerY, 1, centerX, centerY, baseRadius * 2.2)
+      coreGradient.addColorStop(0, `rgba(254, 243, 199, ${0.24 + audioEnergy * 0.2})`)
+      coreGradient.addColorStop(0.38, `rgba(232, 121, 249, ${0.12 + audioEnergy * 0.12})`)
+      coreGradient.addColorStop(1, 'rgba(125, 211, 252, 0)')
+      context.fillStyle = coreGradient
+      context.beginPath()
+      context.arc(centerX, centerY, baseRadius * 2.15 + audioEnergy * 7, 0, Math.PI * 2)
+      context.fill()
+
       colors.forEach((color, index) => {
-        const centerY = height * 0.5 + (index - 2) * 4
-        const amplitude = 7 + index * 1.4 + audioEnergy * 8
-        const frequency = 0.055 + index * 0.006
-        const speed = 0.11 + index * 0.018
+        const points = 96
+        const layerRadius = baseRadius + index * 1.7 + pulse
+        const warp = 2.2 + audioEnergy * 7 + index * 0.9
+        const rotation = frame * (0.006 + index * 0.0018)
 
         context.beginPath()
-        for (let x = -12; x <= width + 12; x += 2) {
-          const y =
-            centerY +
-            Math.sin(x * frequency + frame * speed + index * 0.9) * amplitude +
-            Math.sin(x * frequency * 0.55 + frame * speed * 0.7 + index) * 2.2
+        for (let point = 0; point <= points; point += 1) {
+          const angle = (point / points) * Math.PI * 2
+          const level = levelsRef.current[(point + index * 7) % Math.max(levelsRef.current.length, 1)] ?? audioEnergy
+          const radius =
+            layerRadius +
+            Math.sin(angle * 3 + rotation * 9 + index) * warp * 0.45 +
+            Math.sin(angle * 7 - rotation * 13 + index * 1.8) * warp * 0.22 +
+            level * (3.5 + index * 0.6)
+          const x = centerX + Math.cos(angle + rotation) * radius
+          const y = centerY + Math.sin(angle + rotation) * radius * 0.96
 
-          if (x === -12) context.moveTo(x, y)
+          if (point === 0) context.moveTo(x, y)
           else context.lineTo(x, y)
         }
+        context.closePath()
 
         context.strokeStyle = color
-        context.lineWidth = 1.2
+        context.lineWidth = 1.05
         context.shadowColor = color
-        context.shadowBlur = 7 + audioEnergy * 8
-        context.globalAlpha = 0.36 + index * 0.1
+        context.shadowBlur = 7 + audioEnergy * 12
+        context.globalAlpha = 0.34 + index * 0.09
         context.stroke()
       })
+
+      context.beginPath()
+      context.arc(centerX, centerY, baseRadius * 0.34 + audioEnergy * 2, 0, Math.PI * 2)
+      context.fillStyle = `rgba(254, 243, 199, ${0.22 + audioEnergy * 0.24})`
+      context.shadowColor = '#fef3c7'
+      context.shadowBlur = 12 + audioEnergy * 12
+      context.fill()
 
       context.globalAlpha = 1
       context.globalCompositeOperation = 'source-over'
