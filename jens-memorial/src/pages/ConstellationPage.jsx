@@ -211,7 +211,7 @@ export default function ConstellationPage() {
       const centerX = width * 0.43
       const centerY = height * 0.5
       const baseRadius = Math.min(width, height) * 0.22
-      const pulse = Math.sin(frame * 0.026) * 0.55
+      const pulse = Math.sin(frame * 0.026) * 0.35
 
       context.clearRect(0, 0, width, height)
       context.globalCompositeOperation = 'lighter'
@@ -226,35 +226,18 @@ export default function ConstellationPage() {
       context.fill()
 
       colors.forEach((color, index) => {
-        const points = 96
         const bandEnergy = bands[index] ?? audioEnergy
-        const layerRadius = baseRadius + index * 2 + pulse + bandEnergy * 3.2
-        const warp = 0.25 + bandEnergy * 1.15 + index * 0.08
-        const rotation = frame * (0.0016 + index * 0.00032)
+        const layerRadius = baseRadius * 0.7 + index * 3.4 + pulse + bandEnergy * (3.8 + index * 0.7)
+        const ringAlpha = 0.24 + index * 0.06 + bandEnergy * 0.16
 
         context.beginPath()
-        for (let point = 0; point <= points; point += 1) {
-          const angle = (point / points) * Math.PI * 2
-          const level = levelsRef.current[(point + index * 7) % Math.max(levelsRef.current.length, 1)] ?? audioEnergy
-          const radius =
-            layerRadius +
-            Math.sin(angle * 9 + rotation * 10 + index) * warp * 0.34 +
-            Math.sin(angle * 14 - rotation * 12 + index * 1.8) * warp * 0.2 +
-            Math.sin(angle * 21 + rotation * 7 + index * 0.7) * warp * 0.12 +
-            level * (0.42 + index * 0.06)
-          const x = centerX + Math.cos(angle + rotation) * radius
-          const y = centerY + Math.sin(angle + rotation) * radius * 0.96
-
-          if (point === 0) context.moveTo(x, y)
-          else context.lineTo(x, y)
-        }
-        context.closePath()
+        context.arc(centerX, centerY, layerRadius, 0, Math.PI * 2)
 
         context.strokeStyle = color
-        context.lineWidth = 1.05
+        context.lineWidth = 0.9 + bandEnergy * 0.6
         context.shadowColor = color
-        context.shadowBlur = 6 + bandEnergy * 8
-        context.globalAlpha = 0.32 + index * 0.08
+        context.shadowBlur = 5 + bandEnergy * 9
+        context.globalAlpha = ringAlpha
         context.stroke()
       })
 
@@ -702,7 +685,7 @@ export default function ConstellationPage() {
       )}
 
       <nav
-        className={`fixed left-1/2 z-40 flex -translate-x-1/2 items-center gap-2 rounded-full border border-purple-300/15 bg-black/45 px-3 py-2 shadow-2xl backdrop-blur-md transition-opacity duration-700 ${showRevealOverlay ? 'pointer-events-none opacity-0' : 'opacity-100'}`}
+        className={`fixed left-1/2 z-40 flex -translate-x-1/2 items-center gap-2 rounded-full border border-purple-300/15 bg-black/45 px-3 py-2 shadow-2xl backdrop-blur-md transition-opacity duration-700 ${showRevealOverlay || selectedMemory ? 'pointer-events-none opacity-0' : 'opacity-100'}`}
         style={{ bottom: 'clamp(4.5rem, calc(env(safe-area-inset-bottom, 0px) + 8svh), 7rem)' }}
       >
         <NavItem to="/add" label="Toevoegen" icon={<PenLine size={16} />} />
@@ -761,7 +744,7 @@ export default function ConstellationPage() {
 
       {currentTrack && (
         <div
-          className={`fixed right-0 z-30 overflow-hidden transition-all duration-500 ease-out sm:hidden ${showRevealOverlay ? 'pointer-events-none opacity-0' : 'opacity-100'} ${mobilePlayerOpen ? 'w-[min(22rem,calc(100vw-1rem))]' : 'w-16'}`}
+          className={`fixed right-0 z-30 overflow-hidden transition-all duration-500 ease-out sm:hidden ${showRevealOverlay || selectedMemory ? 'pointer-events-none opacity-0' : 'opacity-100'} ${mobilePlayerOpen ? 'w-[min(22rem,calc(100vw-1rem))]' : 'w-16'}`}
           style={{ bottom: 'clamp(9rem, calc(env(safe-area-inset-bottom, 0px) + 17svh), 13rem)' }}
         >
           <div className="h-16 overflow-hidden rounded-l-full border border-r-0 border-purple-200/15 bg-black/60 shadow-2xl backdrop-blur-xl">
@@ -859,14 +842,14 @@ function NavItem({ to, label, icon }) {
 function MemoryOverlay({ memory, candleLit, onToggleCandle, onClose, onPrevious, onNext }) {
   return (
     <motion.div
-      className="fixed inset-0 z-30 flex items-center justify-center bg-black/65 px-5 backdrop-blur-sm"
+      className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-black/65 px-5 py-6 backdrop-blur-sm"
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
       onMouseDown={onClose}
     >
       <motion.article
-        className="relative w-full max-w-xl rounded-3xl border border-purple-200/15 bg-[#090616]/90 p-7 shadow-2xl"
+        className="relative my-auto max-h-[calc(100svh-3rem)] w-full max-w-xl overflow-y-auto rounded-3xl border border-purple-200/15 bg-[#090616]/90 p-7 shadow-2xl"
         initial={{ opacity: 0, scale: 0.96, y: 16 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}
         exit={{ opacity: 0, scale: 0.96, y: 16 }}
