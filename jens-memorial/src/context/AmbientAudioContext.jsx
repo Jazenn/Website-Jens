@@ -64,8 +64,10 @@ function createAmbientPlayer() {
     duck() {
       fadeTo(0, 0.8)
     },
-    unduck() {
-      if (!manuallyStopped && !audio.paused) fadeTo(maxVolume, 2)
+    async unduck() {
+      if (manuallyStopped) return
+      if (audio.paused) await audio.play()
+      fadeTo(maxVolume, 2)
     },
     stop(reset = false) {
       manuallyStopped = true
@@ -123,7 +125,11 @@ export function AmbientAudioProvider({ children }) {
   }
 
   const unduck = () => {
-    if (enabled) playerRef.current?.unduck()
+    if (!enabled) return
+    playerRef.current?.unduck().catch((error) => {
+      console.error('Kon achtergrondmuziek niet hervatten:', error)
+      setBlocked(true)
+    })
   }
 
   const toggle = async () => {
