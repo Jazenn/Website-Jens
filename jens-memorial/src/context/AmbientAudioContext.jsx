@@ -9,6 +9,7 @@ function createAmbientPlayer() {
   const audio = new Audio(AMBIENT_AUDIO_SRC)
   const fadeDuration = 6
   const maxVolume = 0.42
+  const duckedVolume = 0.004
   let fadeFrame = null
   let loopFrame = null
   let manuallyStopped = false
@@ -62,7 +63,7 @@ function createAmbientPlayer() {
   return {
     play,
     duck() {
-      fadeTo(0, 0.8)
+      fadeTo(duckedVolume, 0.8)
     },
     async unduck() {
       if (manuallyStopped) return
