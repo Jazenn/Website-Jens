@@ -184,7 +184,7 @@ export default function ConstellationPage() {
     if (!canvas) return undefined
 
     const context = canvas.getContext('2d')
-    const colors = ['#fef3c7', '#f59e0b', '#fb7185', '#e879f9', '#7dd3fc']
+    const colors = ['#ddd6fe', '#c4b5fd', '#a78bfa', '#8b5cf6', '#7c3aed']
     let frame = 0
     let animationFrame = null
 
@@ -208,7 +208,7 @@ export default function ConstellationPage() {
         if (!band.length) return audioEnergy
         return band.reduce((sum, level) => sum + level, 0) / band.length
       })
-      const centerX = width * 0.43
+      const centerX = width * 0.48
       const centerY = height * 0.5
       const baseRadius = Math.min(width, height) * 0.22
       const pulse = Math.sin(frame * 0.026) * 0.35
@@ -695,7 +695,7 @@ export default function ConstellationPage() {
 
       {currentTrack && (
         <div
-          className="absolute right-4 z-20 hidden w-[min(23rem,calc(100vw-2rem))] rounded-3xl border border-purple-200/15 bg-black/35 p-4 shadow-2xl backdrop-blur-md sm:right-5 sm:block"
+          className={`absolute right-4 z-20 hidden w-[min(23rem,calc(100vw-2rem))] rounded-3xl border border-purple-200/15 bg-black/35 p-4 shadow-2xl backdrop-blur-md transition-opacity duration-700 sm:right-5 sm:block ${selectedMemory ? 'pointer-events-none opacity-0' : 'opacity-100'}`}
           style={{ bottom: 'max(6rem, calc(env(safe-area-inset-bottom) + 5.75rem))' }}
         >
           <div className="flex items-center gap-3">
@@ -751,14 +751,14 @@ export default function ConstellationPage() {
             <button
               type="button"
               onClick={() => setMobilePlayerOpen(true)}
-              className={`absolute left-0 top-0 flex h-16 w-16 items-center justify-center transition-opacity duration-300 ${mobilePlayerOpen ? 'pointer-events-none opacity-0' : 'opacity-100'}`}
+              className={`absolute left-0 top-0 z-10 flex h-16 w-16 items-center justify-center transition-opacity duration-300 ${mobilePlayerOpen ? 'pointer-events-none opacity-0' : 'opacity-100'}`}
             >
               <span className="h-16 w-16 overflow-hidden rounded-l-full">
                 <canvas ref={mobileWaveCanvasRef} className="h-full w-full" aria-hidden="true" />
               </span>
             </button>
 
-            <div className={`flex h-16 min-w-[min(22rem,calc(100vw-1rem))] items-center gap-2.5 px-3 pr-4 transition-all duration-300 ${mobilePlayerOpen ? 'translate-x-0 opacity-100' : 'translate-x-8 opacity-0'}`}>
+            <div className={`flex h-16 min-w-[min(22rem,calc(100vw-1rem))] items-center gap-2.5 px-3 pr-4 transition-all duration-300 ${mobilePlayerOpen ? 'translate-x-0 opacity-100' : 'pointer-events-none translate-x-8 opacity-0'}`}>
                 <button
                   type="button"
                   onClick={playPrevious}
