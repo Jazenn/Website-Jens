@@ -8,6 +8,7 @@ import ConstellationPage from './pages/ConstellationPage'
 import AddMemoryPage from './pages/AddMemoryPage'
 import MusicPage from './pages/MusicPage'
 import AdminPage from './pages/AdminPage'
+import ProfilePage from './pages/ProfilePage'
 import JourneyIntroPage from './pages/JourneyIntroPage'
 import { AmbientAudioProvider } from './context/AmbientAudioContext'
 import { useAuth } from './context/AuthContext'
@@ -136,6 +137,14 @@ function App() {
                   element={
                     <ProtectedRoute adminOnly>
                       <AdminPage />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/profile"
+                  element={
+                    <ProtectedRoute>
+                      <ProfilePage />
                     </ProtectedRoute>
                   }
                 />

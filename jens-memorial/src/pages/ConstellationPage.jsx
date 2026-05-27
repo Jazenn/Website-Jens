@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom'
 import ForceGraph3D from '3d-force-graph'
 import * as THREE from 'three'
 import { AnimatePresence, motion } from 'framer-motion'
-import { Heart, Music, Pause, PenLine, Play, SkipBack, SkipForward, Shield, Volume2, VolumeX, X } from 'lucide-react'
+import { Heart, Music, Pause, PenLine, Play, SkipBack, SkipForward, Shield, User, Volume2, VolumeX, X } from 'lucide-react'
 import { useAmbientAudio } from '../context/AmbientAudioContext'
 import { useAuth } from '../context/AuthContext'
 import { useMusicPlayer } from '../context/MusicPlayerContext'
@@ -166,7 +166,7 @@ export default function ConstellationPage() {
   const [mobilePlayerOpen, setMobilePlayerOpen] = useState(false)
   const { enabled: soundEnabled, toggle: toggleSound } = useAmbientAudio()
   const { currentTrack, isPlaying, levels, toggle: toggleMusic, playNext, playPrevious } = useMusicPlayer()
-  const { user } = useAuth()
+  const { user, isAdmin } = useAuth()
   const [remoteMemories, setRemoteMemories] = useState([])
   const [revealReady, setRevealReady] = useState(() => sessionStorage.getItem(JOURNEY_TRANSITION_KEY) !== 'true')
   const [loadingMemories, setLoadingMemories] = useState(true)
@@ -690,7 +690,11 @@ export default function ConstellationPage() {
       >
         <NavItem to="/add" label="Toevoegen" icon={<PenLine size={16} />} />
         <NavItem to="/music" label="Muziek" icon={<Music size={16} />} />
-        <NavItem to="/admin" label="Admin" icon={<Shield size={16} />} />
+        {isAdmin ? (
+          <NavItem to="/admin" label="Admin" icon={<Shield size={16} />} />
+        ) : (
+          <NavItem to="/profile" label="Profiel" icon={<User size={16} />} />
+        )}
       </nav>
 
       {currentTrack && (

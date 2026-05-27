@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { ArrowLeft, Check, Edit3, ExternalLink, FileText, Flame, Image, Music, Quote, RefreshCw, Save, Shield, Star, Trash2, UserCheck, Video, X } from 'lucide-react'
+import { ArrowLeft, Check, Edit3, ExternalLink, FileText, Flame, Image, LogOut, Music, Quote, RefreshCw, Save, Shield, Star, Trash2, UserCheck, Video, X } from 'lucide-react'
 import { deleteMemory, fetchMemories, updateMemory, updateMemoryCoreStatus } from '../lib/memories'
 import { deleteTrack, fetchTracks, updateTrack } from '../lib/tracks'
 import { createWhitelistedUser, fetchUsers, updateUserAccess } from '../lib/users'
+import { useAuth } from '../context/AuthContext'
 
 const TABS = [
   { id: 'foto', label: "Foto's", icon: Image },
@@ -41,6 +42,7 @@ function formatDate(date) {
 }
 
 export default function AdminPage() {
+  const { signOut } = useAuth()
   const [activeTab, setActiveTab] = useState('foto')
   const [memories, setMemories] = useState([])
   const [tracks, setTracks] = useState([])
@@ -204,15 +206,25 @@ export default function AdminPage() {
             Terug
           </Link>
 
-          <button
-            type="button"
-            onClick={loadAdminContent}
-            disabled={loading}
-            className="inline-flex w-fit items-center gap-2 rounded-full border border-purple-200/15 bg-black/25 px-4 py-2 text-xs uppercase tracking-[0.22em] text-white/60 transition hover:bg-white/10 disabled:opacity-50"
-          >
-            <RefreshCw size={14} />
-            Ververs
-          </button>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={loadAdminContent}
+              disabled={loading}
+              className="inline-flex w-fit items-center gap-2 rounded-full border border-purple-200/15 bg-black/25 px-4 py-2 text-xs uppercase tracking-[0.22em] text-white/60 transition hover:bg-white/10 disabled:opacity-50"
+            >
+              <RefreshCw size={14} />
+              Ververs
+            </button>
+            <button
+              type="button"
+              onClick={signOut}
+              className="inline-flex w-fit items-center gap-2 rounded-full border border-rose-300/20 bg-rose-300/10 px-4 py-2 text-xs uppercase tracking-[0.22em] text-rose-200/80 transition hover:bg-rose-300/20 hover:text-rose-100"
+            >
+              <LogOut size={14} />
+              Log uit
+            </button>
+          </div>
         </header>
 
         <section className="mb-8">
