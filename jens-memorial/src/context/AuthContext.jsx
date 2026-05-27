@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState } from 'react'
+import { createContext, useContext, useEffect, useState, useRef } from 'react'
 import { supabase, supabaseConfigError } from '../lib/supabase'
 
 const AuthContext = createContext(null)
@@ -121,62 +121,67 @@ export function AuthProvider({ children }) {
   const [user, setUser] = useState(null)
   const [userRecord, setUserRecord] = useState(null)
   const [loading, setLoading] = useState(!supabaseConfigError)
+  const initStart = useRef(Date.now())
 
   useEffect(() => {
     if (supabaseConfigError) return
-    let mounted = true
-    let initialLoadDone = false
-    const initStart = Date.now()
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, session) => {
+      (event, session) => {
         console.log(`[Auth] onAuthStateChange event: ${event}`)
-        try {
-          const authUser = session?.user ?? null
-          setUser(authUser)
-          
-          if (authUser) {
-            try {
-              const record = await loadUserRecord(authUser)
-              if (!mounted) return
-              console.log('[Auth] loaded record for:', authUser.email)
-              setUserRecord(record)
-            } catch (e) {
-              console.error('[Auth] failed to load user record:', e)
-              if (!initialLoadDone) {
-                setUserRecord(null)
-              } else {
-                setUserRecord(prev => prev)
-              }
-            }
-          } else {
-            console.log('[Auth] user is null')
-            setUserRecord(null)
-          }
-        } catch (e) {
-          console.error('[Auth] fatal error:', e)
-          setUserRecord(prev => prev)
-        } finally {
-          if (!mounted) return
-          if (!initialLoadDone) {
-            const elapsed = Date.now() - initStart
-            if (elapsed < 1000) {
-              await new Promise(resolve => setTimeout(resolve, 1000 - elapsed))
-            }
-            if (mounted) {
-              setLoading(false)
-              initialLoadDone = true
-            }
-          }
-        }
+        setUser(session?.user ?? null)
       }
     )
 
     return () => {
-      mounted = false
       subscription?.unsubscribe()
     }
   }, [])
+
+  useEffect(() => {
+    if (supabaseConfigError) return
+    let mounted = true
+
+    async function fetchRecord() {
+      try {
+        if (user) {
+          const record = await loadUserRecord(user)
+          if (mounted) {
+            console.log('[Auth] loaded record for:', user.email)
+            setUserRecord(record)
+          }
+        } else {
+          if (mounted) {
+            console.log('[Auth] user is null')
+            setUserRecord(null)
+          }
+        }
+      } catch (e) {
+        console.error('[Auth] fatal error loading record:', e)
+        if (mounted) {
+          // Keep current state on error (e.g. timeout) if we already have it, else null
+          setUserRecord(prev => prev)
+        }
+      } finally {
+        if (!mounted) return
+        
+        // Enforce the 1 second minimum UI timer
+        const elapsed = Date.now() - initStart.current
+        if (elapsed < 1000) {
+          await new Promise(resolve => setTimeout(resolve, 1000 - elapsed))
+        }
+        if (mounted) {
+          setLoading(false)
+        }
+      }
+    }
+
+    fetchRecord()
+
+    return () => {
+      mounted = false
+    }
+  }, [user?.id])
 
   const signOut = () => supabase.auth.signOut()
   const isAdmin = userRecord?.is_admin === true
