@@ -3,7 +3,7 @@ import { supabase, supabaseConfigError } from '../lib/supabase'
 
 const AuthContext = createContext(null)
 const adminEmail = import.meta.env.VITE_ADMIN_EMAIL?.toLowerCase()
-const AUTH_TIMEOUT_MS = 5000
+const AUTH_TIMEOUT_MS = 3000
 
 function withTimeout(promise, label) {
   return Promise.race([
@@ -119,6 +119,8 @@ export function AuthProvider({ children }) {
 
     async function initialiseAuth() {
       try {
+        const start = Date.now()
+        
         const { data: { session } } = await withTimeout(supabase.auth.getSession(), 'get session')
         if (!mounted) return
 
@@ -139,6 +141,14 @@ export function AuthProvider({ children }) {
         } else {
           setUserRecord(null)
         }
+        
+        // Zorg dat het loading scherm altijd minimaal 1 seconde zichtbaar is 
+        // om flitsende schermen (chaotisch effect) te voorkomen, zoals verzocht.
+        const elapsed = Date.now() - start
+        if (elapsed < 1000) {
+          await new Promise(resolve => setTimeout(resolve, 1000 - elapsed))
+        }
+        
       } catch (e) {
         console.error('initialiseAuth error:', e)
         if (mounted) {
