@@ -844,6 +844,15 @@ function NavItem({ to, label, icon }) {
 }
 
 function MemoryOverlay({ memory, candleLit, onToggleCandle, onClose, onPrevious, onNext }) {
+  const { unduck } = useAmbientAudio()
+
+  useEffect(() => {
+    return () => {
+      // Ensure we unduck when the overlay is closed, in case a video was playing
+      unduck()
+    }
+  }, [unduck])
+
   return (
     <motion.div
       className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-black/65 px-5 py-6 backdrop-blur-sm"
@@ -882,7 +891,15 @@ function MemoryOverlay({ memory, candleLit, onToggleCandle, onClose, onPrevious,
         {memory.mediaUrl && (
           <div className="mt-6 overflow-hidden rounded-2xl border border-purple-200/10 bg-black/25">
             {memory.mediaResourceType === 'video' || memory.type === 'video' ? (
-              <video src={memory.mediaUrl} poster={memory.mediaThumbnailUrl || undefined} className="max-h-[52vh] w-full object-contain" controls />
+              <video 
+                key={memory.mediaUrl}
+                src={memory.mediaUrl} 
+                poster={memory.mediaThumbnailUrl || undefined} 
+                className="max-h-[52vh] w-full object-contain bg-black/40" 
+                controls 
+                playsInline 
+                preload="metadata" 
+              />
             ) : (
               <img src={memory.mediaUrl} alt={memory.title} className="max-h-[52vh] w-full object-contain" />
             )}

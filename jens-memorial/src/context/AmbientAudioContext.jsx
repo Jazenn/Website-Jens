@@ -67,7 +67,13 @@ function createAmbientPlayer() {
     },
     async unduck() {
       if (manuallyStopped) return
-      if (audio.paused) await audio.play()
+      if (audio.paused) {
+        try {
+          await audio.play()
+        } catch (error) {
+          console.error('Kon achtergrondmuziek niet hervatten tijdens unduck:', error)
+        }
+      }
       fadeTo(maxVolume, 2)
     },
     stop(reset = false) {
