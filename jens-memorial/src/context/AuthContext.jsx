@@ -127,21 +127,36 @@ export function AuthProvider({ children }) {
   useEffect(() => {
     if (supabaseConfigError) return
 
-    // Ensure we parse the URL hash (OAuth redirect) before finalizing the initial session
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      console.log('[Auth] getSession finished, user:', session?.user?.email)
-      setUser(session?.user ?? null)
+    // Fallback timer: NEVER allow infinite loading screen. 
+    // If Supabase events fail to fire, force unblock after 4 seconds.
+    const forceUnlock = setTimeout(() => {
       setSessionReady(true)
-    })
+    }, 4000)
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (event, session) => {
         console.log(`[Auth] onAuthStateChange event: ${event}`)
         setUser(session?.user ?? null)
+        
+        // Check if there is an OAuth token in the URL being processed
+        const hasHash = window.location.hash.includes('access_token=') || window.location.hash.includes('error=')
+        
+        if (event === 'INITIAL_SESSION') {
+          if (!hasHash) {
+            // Normal load: no hash, unblock immediately
+            setSessionReady(true)
+          } else {
+            console.log('[Auth] URL hash detected, waiting for SIGNED_IN event to unblock...')
+          }
+        } else if (event === 'SIGNED_IN' || event === 'SIGNED_OUT') {
+          // Token processing finished
+          setSessionReady(true)
+        }
       }
     )
 
     return () => {
+      clearTimeout(forceUnlock)
       subscription?.unsubscribe()
     }
   }, [])
