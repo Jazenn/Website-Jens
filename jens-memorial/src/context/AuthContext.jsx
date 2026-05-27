@@ -121,10 +121,18 @@ export function AuthProvider({ children }) {
   const [user, setUser] = useState(null)
   const [userRecord, setUserRecord] = useState(null)
   const [loading, setLoading] = useState(!supabaseConfigError)
+  const [sessionReady, setSessionReady] = useState(false)
   const initStart = useRef(Date.now())
 
   useEffect(() => {
     if (supabaseConfigError) return
+
+    // Ensure we parse the URL hash (OAuth redirect) before finalizing the initial session
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      console.log('[Auth] getSession finished, user:', session?.user?.email)
+      setUser(session?.user ?? null)
+      setSessionReady(true)
+    })
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (event, session) => {
@@ -140,7 +148,10 @@ export function AuthProvider({ children }) {
 
   useEffect(() => {
     if (supabaseConfigError) return
+    if (!sessionReady) return // Wait for initial session parse to avoid premature redirect to /login
+
     let mounted = true
+    let loadingTimeout;
 
     async function fetchRecord() {
       try {
@@ -159,7 +170,6 @@ export function AuthProvider({ children }) {
       } catch (e) {
         console.error('[Auth] fatal error loading record:', e)
         if (mounted) {
-          // Keep current state on error (e.g. timeout) if we already have it, else null
           setUserRecord(prev => prev)
         }
       } finally {
@@ -168,9 +178,10 @@ export function AuthProvider({ children }) {
         // Enforce the 1 second minimum UI timer
         const elapsed = Date.now() - initStart.current
         if (elapsed < 1000) {
-          await new Promise(resolve => setTimeout(resolve, 1000 - elapsed))
-        }
-        if (mounted) {
+          loadingTimeout = setTimeout(() => {
+            if (mounted) setLoading(false)
+          }, 1000 - elapsed)
+        } else {
           setLoading(false)
         }
       }
@@ -180,8 +191,9 @@ export function AuthProvider({ children }) {
 
     return () => {
       mounted = false
+      if (loadingTimeout) clearTimeout(loadingTimeout)
     }
-  }, [user?.id])
+  }, [user?.id, sessionReady])
 
   const signOut = () => supabase.auth.signOut()
   const isAdmin = userRecord?.is_admin === true
