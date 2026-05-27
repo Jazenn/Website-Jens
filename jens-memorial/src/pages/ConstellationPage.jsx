@@ -843,6 +843,33 @@ function NavItem({ to, label, icon }) {
   )
 }
 
+function VideoPlayer({ src, poster }) {
+  const videoRef = useRef(null)
+
+  useEffect(() => {
+    if (videoRef.current) {
+      videoRef.current.load()
+    }
+  }, [src])
+
+  return (
+    <video
+      ref={videoRef}
+      controls
+      playsInline
+      preload="metadata"
+      poster={poster}
+      className="max-h-[52vh] w-full object-contain bg-black/20"
+      controlsList="nodownload"
+    >
+      <source src={src} type="video/mp4" />
+      <source src={src} type="video/quicktime" />
+      <source src={src} type="video/webm" />
+      Uw browser ondersteunt geen HTML5 video.
+    </video>
+  )
+}
+
 function MemoryOverlay({ memory, candleLit, onToggleCandle, onClose, onPrevious, onNext }) {
   const { unduck } = useAmbientAudio()
 
@@ -891,14 +918,7 @@ function MemoryOverlay({ memory, candleLit, onToggleCandle, onClose, onPrevious,
         {memory.mediaUrl && (
           <div className="mt-6 overflow-hidden rounded-2xl border border-purple-200/10 bg-black/25">
             {memory.mediaResourceType === 'video' || memory.type === 'video' ? (
-              <video 
-                src={memory.mediaUrl} 
-                poster={memory.mediaThumbnailUrl || undefined} 
-                className="max-h-[52vh] w-full object-contain" 
-                controls 
-                playsInline 
-                preload="metadata" 
-              />
+              <VideoPlayer src={memory.mediaUrl} poster={memory.mediaThumbnailUrl || undefined} />
             ) : (
               <img src={memory.mediaUrl} alt={memory.title} className="max-h-[52vh] w-full object-contain" />
             )}
