@@ -8,10 +8,12 @@ export default function WaitingPage() {
   const navigate = useNavigate()
 
   useEffect(() => {
-    if (isApproved) {
+    if (!user) {
+      navigate('/login', { replace: true })
+    } else if (isApproved) {
       navigate('/', { replace: true })
     }
-  }, [isApproved, navigate])
+  }, [user, isApproved, navigate])
 
   useEffect(() => {
     const interval = setInterval(() => {
