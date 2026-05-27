@@ -867,6 +867,8 @@ function VideoPlayer({ src, poster }) {
       poster={poster}
       className="max-h-[52vh] w-full object-contain bg-black/20"
       controlsList="nodownload"
+      disablePictureInPicture
+      disableRemotePlayback
     >
       <source src={optimizedSrc} />
       Uw browser ondersteunt geen HTML5 video.
