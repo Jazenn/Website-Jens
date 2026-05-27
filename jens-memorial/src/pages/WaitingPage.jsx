@@ -1,8 +1,27 @@
+import { useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { useAuth } from '../context/AuthContext'
 
 export default function WaitingPage() {
-  const { user, signOut } = useAuth()
+  const { user, isApproved, signOut, refreshUserRecord } = useAuth()
+  const navigate = useNavigate()
+
+  useEffect(() => {
+    if (isApproved) {
+      navigate('/', { replace: true })
+    }
+  }, [isApproved, navigate])
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      if (!isApproved && refreshUserRecord) {
+        refreshUserRecord()
+      }
+    }, 3000)
+    
+    return () => clearInterval(interval)
+  }, [isApproved, refreshUserRecord])
 
   return (
     <div

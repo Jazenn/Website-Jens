@@ -34,7 +34,7 @@ async function notifyAccessRequest(authUser, name) {
 async function loadUserRecord(authUser) {
   try {
     const admin = isAdminUser(authUser)
-    const { data: existing } = await withTimeout(
+    const { data: existing, error: existingError } = await withTimeout(
       supabase
         .from('users')
         .select('*')
@@ -43,9 +43,11 @@ async function loadUserRecord(authUser) {
       'load existing user record'
     )
 
+    if (existingError) throw existingError
+
     if (existing) {
       if (admin && (!existing.approved || !existing.is_admin)) {
-        const { data: updated } = await withTimeout(
+        const { data: updated, error: updateError } = await withTimeout(
           supabase
             .from('users')
             .update({ approved: true, is_admin: true })
@@ -54,6 +56,8 @@ async function loadUserRecord(authUser) {
             .maybeSingle(),
           'update admin user record'
         )
+
+        if (updateError) throw updateError
 
         return updated ?? { ...existing, approved: true, is_admin: true }
       }
@@ -73,10 +77,11 @@ async function loadUserRecord(authUser) {
       is_admin: admin,
     }
 
-    await withTimeout(supabase.from('users').insert(newRecord), 'insert user record')
+    const { error: insertError } = await withTimeout(supabase.from('users').insert(newRecord), 'insert user record')
+    if (insertError) throw insertError
     if (!admin) notifyAccessRequest(authUser, name)
 
-    const { data: fresh } = await withTimeout(
+    const { data: fresh, error: freshError } = await withTimeout(
       supabase
         .from('users')
         .select('*')
@@ -84,6 +89,8 @@ async function loadUserRecord(authUser) {
         .maybeSingle(),
       'load fresh user record'
     )
+
+    if (freshError) throw freshError
 
     return fresh ?? newRecord
   } catch (e) {
@@ -96,7 +103,7 @@ async function loadUserRecord(authUser) {
         is_admin: true,
       }
     }
-    return null
+    throw e
   }
 }
 
@@ -119,9 +126,16 @@ export function AuthProvider({ children }) {
         setUser(authUser)
 
         if (authUser) {
-          const record = await loadUserRecord(authUser)
-          if (!mounted) return
-          setUserRecord(record)
+          try {
+            const record = await loadUserRecord(authUser)
+            if (!mounted) return
+            setUserRecord(record)
+          } catch (e) {
+            console.error('initialiseAuth failed to load user record:', e)
+            if (!mounted) return
+            // Keep userRecord as null if it failed on initial load, they will be asked to wait or retry
+            setUserRecord(null)
+          }
         } else {
           setUserRecord(null)
         }
@@ -144,14 +158,21 @@ export function AuthProvider({ children }) {
           const authUser = session?.user ?? null
           setUser(authUser)
           if (authUser) {
-            const record = await loadUserRecord(authUser)
-            setUserRecord(record)
+            try {
+              const record = await loadUserRecord(authUser)
+              setUserRecord(record)
+            } catch (e) {
+              console.error('onAuthStateChange failed to load user record:', e)
+              // IMPORTANT: Do NOT clear userRecord on temporary network failures 
+              // during token refreshes, otherwise the user gets kicked to /waiting
+              setUserRecord(prev => prev)
+            }
           } else {
             setUserRecord(null)
           }
         } catch (e) {
           console.error('onAuthStateChange error:', e)
-          setUserRecord(null)
+          setUserRecord(prev => prev) // don't wipe on unexpected error
         } finally {
           setLoading(false)
         }
@@ -168,6 +189,17 @@ export function AuthProvider({ children }) {
   const isAdmin = userRecord?.is_admin === true
   const isApproved = userRecord?.approved === true
 
+  const refreshUserRecord = async () => {
+    if (user) {
+      try {
+        const record = await loadUserRecord(user)
+        setUserRecord(record)
+      } catch (e) {
+        console.error('Failed to refresh user record:', e)
+      }
+    }
+  }
+
   return (
     <AuthContext.Provider value={{
       user,
@@ -176,7 +208,8 @@ export function AuthProvider({ children }) {
       configError: supabaseConfigError,
       signOut,
       isAdmin,
-      isApproved
+      isApproved,
+      refreshUserRecord
     }}>
       {children}
     </AuthContext.Provider>
