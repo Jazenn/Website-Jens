@@ -889,14 +889,16 @@ function MemoryOverlay({ memory, candleLit, onToggleCandle, onClose, onPrevious,
         )}
 
         {memory.mediaUrl && (
-          <div className="mt-6 overflow-hidden rounded-2xl border border-purple-200/10 bg-black/25">
+          <div className="mt-6 overflow-hidden rounded-2xl border border-purple-200/10 bg-black/25 relative" style={{ transform: 'translateZ(0)' }}>
             {memory.mediaResourceType === 'video' || memory.type === 'video' ? (
               <video 
                 key={memory.mediaUrl}
                 src={memory.mediaUrl} 
                 poster={memory.mediaThumbnailUrl || undefined} 
                 className="max-h-[52vh] w-full object-contain bg-black/40" 
+                style={{ transform: 'translateZ(0)', willChange: 'transform' }}
                 controls 
+                controlsList="nodownload"
                 playsInline 
                 preload="metadata" 
               />
