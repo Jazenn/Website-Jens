@@ -3,7 +3,7 @@ import { supabase, supabaseConfigError } from '../lib/supabase'
 
 const AuthContext = createContext(null)
 const adminEmail = import.meta.env.VITE_ADMIN_EMAIL?.toLowerCase()
-const AUTH_TIMEOUT_MS = 2000
+const AUTH_TIMEOUT_MS = 10000
 
 function withTimeout(promise, label) {
   return Promise.race([
@@ -121,7 +121,7 @@ export function AuthProvider({ children }) {
       try {
         const start = Date.now()
         
-        const { data: { session } } = await withTimeout(supabase.auth.getSession(), 'get session')
+        const { data: { session } } = await supabase.auth.getSession()
         if (!mounted) return
 
         const authUser = session?.user ?? null
