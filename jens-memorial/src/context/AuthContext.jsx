@@ -3,7 +3,7 @@ import { supabase, supabaseConfigError } from '../lib/supabase'
 
 const AuthContext = createContext(null)
 const adminEmail = import.meta.env.VITE_ADMIN_EMAIL?.toLowerCase()
-const AUTH_TIMEOUT_MS = 3000
+const AUTH_TIMEOUT_MS = 2000
 
 function withTimeout(promise, label) {
   return Promise.race([
