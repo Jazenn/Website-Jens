@@ -846,11 +846,17 @@ function NavItem({ to, label, icon }) {
 function VideoPlayer({ src, poster }) {
   const videoRef = useRef(null)
 
+  const optimizedSrc = useMemo(() => {
+    if (!src || !src.includes('cloudinary.com/')) return src
+    // Inject video codec auto, format auto, and quality auto parameters to ensure Cloudinary transcodes HEVC to supported formats
+    return src.replace('/upload/', '/upload/vc_auto,f_auto,q_auto/')
+  }, [src])
+
   useEffect(() => {
     if (videoRef.current) {
       videoRef.current.load()
     }
-  }, [src])
+  }, [optimizedSrc])
 
   return (
     <video
@@ -862,9 +868,7 @@ function VideoPlayer({ src, poster }) {
       className="max-h-[52vh] w-full object-contain bg-black/20"
       controlsList="nodownload"
     >
-      <source src={src} type="video/mp4" />
-      <source src={src} type="video/quicktime" />
-      <source src={src} type="video/webm" />
+      <source src={optimizedSrc} />
       Uw browser ondersteunt geen HTML5 video.
     </video>
   )
