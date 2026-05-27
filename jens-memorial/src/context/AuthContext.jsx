@@ -33,7 +33,11 @@ async function notifyAccessRequest(authUser, name) {
 
 async function loadUserRecord(authUser) {
   try {
+    console.log('[Auth] loadUserRecord started for:', authUser.email)
     const admin = isAdminUser(authUser)
+    
+    console.log('[Auth] Fetching existing user record...')
+    const fetchStart = Date.now()
     const { data: existing, error: existingError } = await withTimeout(
       supabase
         .from('users')
@@ -42,10 +46,15 @@ async function loadUserRecord(authUser) {
         .maybeSingle(),
       'load existing user record'
     )
+    console.log(`[Auth] Fetch completed in ${Date.now() - fetchStart}ms`)
 
-    if (existingError) throw existingError
+    if (existingError) {
+      console.error('[Auth] Fetch existing error:', existingError)
+      throw existingError
+    }
 
     if (existing) {
+      console.log('[Auth] Existing record found:', existing.email)
       if (admin && (!existing.approved || !existing.is_admin)) {
         const { data: updated, error: updateError } = await withTimeout(
           supabase
@@ -94,8 +103,9 @@ async function loadUserRecord(authUser) {
 
     return fresh ?? newRecord
   } catch (e) {
-    console.error('loadUserRecord error:', e)
+    console.error('[Auth] loadUserRecord threw error:', e)
     if (isAdminUser(authUser)) {
+      console.log('[Auth] Falling back to dummy admin record due to error')
       return {
         email: authUser.email,
         name: authUser.user_metadata?.full_name || authUser.user_metadata?.name || authUser.email.split('@')[0],
@@ -114,84 +124,57 @@ export function AuthProvider({ children }) {
 
   useEffect(() => {
     if (supabaseConfigError) return
-
     let mounted = true
-
-    async function initialiseAuth() {
-      try {
-        const start = Date.now()
-        
-        const { data: { session } } = await supabase.auth.getSession()
-        if (!mounted) return
-
-        const authUser = session?.user ?? null
-        setUser(authUser)
-
-        if (authUser) {
-          try {
-            const record = await loadUserRecord(authUser)
-            if (!mounted) return
-            setUserRecord(record)
-          } catch (e) {
-            console.error('initialiseAuth failed to load user record:', e)
-            if (!mounted) return
-            // Keep userRecord as null if it failed on initial load, they will be asked to wait or retry
-            setUserRecord(null)
-          }
-        } else {
-          setUserRecord(null)
-        }
-        
-        // Zorg dat het loading scherm altijd minimaal 1 seconde zichtbaar is 
-        // om flitsende schermen (chaotisch effect) te voorkomen, zoals verzocht.
-        const elapsed = Date.now() - start
-        if (elapsed < 1000) {
-          await new Promise(resolve => setTimeout(resolve, 1000 - elapsed))
-        }
-        
-      } catch (e) {
-        console.error('initialiseAuth error:', e)
-        if (mounted) {
-          setUser(null)
-          setUserRecord(null)
-        }
-      } finally {
-        if (mounted) setLoading(false)
-      }
-    }
-
-    initialiseAuth()
+    let initialLoadDone = false
+    const initStart = Date.now()
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (_event, session) => {
+      async (event, session) => {
+        console.log(`[Auth] onAuthStateChange event: ${event}`)
         try {
           const authUser = session?.user ?? null
           setUser(authUser)
+          
           if (authUser) {
             try {
               const record = await loadUserRecord(authUser)
+              if (!mounted) return
+              console.log('[Auth] loaded record for:', authUser.email)
               setUserRecord(record)
             } catch (e) {
-              console.error('onAuthStateChange failed to load user record:', e)
-              // IMPORTANT: Do NOT clear userRecord on temporary network failures 
-              // during token refreshes, otherwise the user gets kicked to /waiting
-              setUserRecord(prev => prev)
+              console.error('[Auth] failed to load user record:', e)
+              if (!initialLoadDone) {
+                setUserRecord(null)
+              } else {
+                setUserRecord(prev => prev)
+              }
             }
           } else {
+            console.log('[Auth] user is null')
             setUserRecord(null)
           }
         } catch (e) {
-          console.error('onAuthStateChange error:', e)
-          setUserRecord(prev => prev) // don't wipe on unexpected error
+          console.error('[Auth] fatal error:', e)
+          setUserRecord(prev => prev)
         } finally {
-          setLoading(false)
+          if (!mounted) return
+          if (!initialLoadDone) {
+            const elapsed = Date.now() - initStart
+            if (elapsed < 1000) {
+              await new Promise(resolve => setTimeout(resolve, 1000 - elapsed))
+            }
+            if (mounted) {
+              setLoading(false)
+              initialLoadDone = true
+            }
+          }
         }
       }
     )
 
     return () => {
       mounted = false
-      subscription.unsubscribe()
+      subscription?.unsubscribe()
     }
   }, [])
 
