@@ -410,6 +410,7 @@ export default function ConstellationPage() {
     graph.controls().autoRotateSpeed = 0.32
     graph.controls().minDistance = window.innerWidth < 768 ? 180 : 100
     graph.controls().maxDistance = window.innerWidth < 768 ? 1050 : 910
+    graph.controls().enablePan = false
     graph.resumeAnimation()
     graphInstanceRef.current = graph
 
