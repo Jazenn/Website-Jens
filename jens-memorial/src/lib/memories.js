@@ -6,6 +6,17 @@ export function mapMemoryRecord(record, index = 0, total = 1) {
   const candleCount = record.candle_count ?? 0
   const isPinnedCoreMemory = record.is_core_memory ?? false
 
+  let quoteData = null
+  if (record.type === 'quote' && record.body) {
+    try {
+      if (record.body.trim().startsWith('{')) {
+        quoteData = JSON.parse(record.body)
+      }
+    } catch (e) {
+      // Ignore parsing errors for legacy non-JSON quotes
+    }
+  }
+
   return {
     id: record.id,
     type: record.type,
@@ -27,6 +38,7 @@ export function mapMemoryRecord(record, index = 0, total = 1) {
     createdAt: record.created_at,
     positionIndex: index,
     positionTotal: total,
+    quoteData,
   }
 }
 

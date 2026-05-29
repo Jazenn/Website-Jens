@@ -17,10 +17,24 @@ const PULSING_MEMORIES_KEY = 'jens-pulsing-memory-ids'
 const MEMORY_FIELD_LIMITS = {
   title: 100,
   author: 60,
-  quote: 400,
+  quote: 500,
   body: 500,
   text: 1200,
 }
+const DUTCH_MONTHS = [
+  'Januari',
+  'Februari',
+  'Maart',
+  'April',
+  'Mei',
+  'Juni',
+  'Juli',
+  'Augustus',
+  'September',
+  'Oktober',
+  'November',
+  'December',
+]
 
 export default function AddMemoryPage() {
   const navigate = useNavigate()
@@ -34,6 +48,12 @@ export default function AddMemoryPage() {
   const [error, setError] = useState('')
   const [uploading, setUploading] = useState(false)
 
+  // Quote extension states
+  const [quoteBy, setQuoteBy] = useState('')
+  const [quoteMonth, setQuoteMonth] = useState('')
+  const [quoteYear, setQuoteYear] = useState('')
+  const [quoteContext, setQuoteContext] = useState('')
+
   const selectedType = useMemo(() => MEMORY_TYPES.find((memoryType) => memoryType.id === type), [type])
   const previewUrl = useMemo(() => (file ? URL.createObjectURL(file) : null), [file])
   const needsFile = type === 'foto' || type === 'video'
@@ -45,10 +65,24 @@ export default function AddMemoryPage() {
     }
   }, [previewUrl])
 
+  const handleBodyChange = (value) => {
+    if (type === 'quote') {
+      const lines = value.split('\n')
+      if (lines.length > 6) {
+        return
+      }
+    }
+    setBody(value)
+  }
+
   async function handleSubmit(event) {
     event.preventDefault()
     setError('')
     if (type === 'tekst' && !body.trim()) return
+    if (type === 'quote' && !body.trim()) {
+      setError('Vul de quote in.')
+      return
+    }
     if (needsFile && !file) {
       setError('Kies eerst een bestand voor deze herinnering.')
       return
@@ -72,12 +106,24 @@ export default function AddMemoryPage() {
       }
 
       const fallbackTitle = type === 'foto' ? 'Herinnerings foto' : type === 'video' ? 'Herinnerings video' : type === 'quote' ? 'Herinnerings quote' : 'Herinnering'
+      
+      let finalizedBody = body.trim()
+      if (type === 'quote') {
+        finalizedBody = JSON.stringify({
+          quote: body.trim(),
+          quoteBy: quoteBy.trim(),
+          month: quoteMonth,
+          year: quoteYear.trim(),
+          context: quoteContext.trim(),
+        })
+      }
+
       const memory = {
         id: `custom-${Date.now()}`,
         type,
         title: title.trim() || fallbackTitle,
         author: author.trim(),
-        body: body.trim(),
+        body: finalizedBody,
         date: new Date().toLocaleDateString('nl-NL', { day: '2-digit', month: '2-digit', year: 'numeric' }),
         fileName: file?.name ?? '',
         mediaProvider: media?.provider ?? null,
@@ -114,6 +160,10 @@ export default function AddMemoryPage() {
     setFile(null)
     setError('')
     setSubmitted(false)
+    setQuoteBy('')
+    setQuoteMonth('')
+    setQuoteYear('')
+    setQuoteContext('')
   }
 
   function handleFileChange(event) {
@@ -238,12 +288,12 @@ export default function AddMemoryPage() {
               </label>
 
               <label className="block">
-                <span className="mb-2 block text-xs uppercase tracking-[0.22em] text-white/45">Van wie (optioneel)</span>
+                <span className="mb-2 block text-xs uppercase tracking-[0.22em] text-white/45">Ingezonden door (optioneel)</span>
                 <input
                   value={author}
                   maxLength={MEMORY_FIELD_LIMITS.author}
                   onChange={(event) => setAuthor(event.target.value)}
-                  placeholder="Je naam"
+                  placeholder="Jouw naam (als inzender)"
                   className="w-full rounded-2xl border border-white/10 bg-white/[0.06] px-4 py-3 text-sm text-white outline-none transition placeholder:text-white/25 focus:border-purple-200/45"
                 />
               </label>
@@ -277,7 +327,7 @@ export default function AddMemoryPage() {
                       <span className="text-sm text-white/70">Kies een bestand voor deze herinnering</span>
                       <span className="mt-2 text-xs text-white/35">
                         {type === 'foto'
-                          ? `JPG, PNG, WebP of GIF · max ${MEDIA_LIMITS.imageMaxBytes / 1024 / 1024}MB`
+                          ? `JPG, PNG, WebP or GIF · max ${MEDIA_LIMITS.imageMaxBytes / 1024 / 1024}MB`
                           : `MP4, MOV of WebM · max ${MEDIA_LIMITS.videoMaxBytes / 1024 / 1024}MB`}
                       </span>
                     </>
@@ -289,19 +339,83 @@ export default function AddMemoryPage() {
 
             <label className="mt-4 block">
               <span className="mb-2 flex items-center justify-between text-xs uppercase tracking-[0.22em] text-white/45">
-                <span>{type === 'tekst' ? 'Herinnering verplicht' : type === 'quote' ? 'Quote optioneel' : 'Herinnering (optioneel)'}</span>
+                <span>{type === 'tekst' ? 'Herinnering (verplicht)' : type === 'quote' ? 'Quote (verplicht)' : 'Herinnering (optioneel)'}</span>
                 <span className="tracking-normal text-white/25">{body.length}/{bodyLimit}</span>
               </span>
               <textarea
                 value={body}
                 maxLength={bodyLimit}
-                onChange={(event) => setBody(event.target.value)}
-                placeholder={type === 'quote' ? '“Typ hier de quote...”' : 'Schrijf hier wat je wilt delen...'}
+                onChange={(event) => handleBodyChange(event.target.value)}
+                placeholder={type === 'quote' ? '“Typ hier de quote...” (max. 6 regels)' : 'Schrijf hier wat je wilt delen...'}
                 rows={6}
-                required={type === 'tekst'}
+                required={type === 'tekst' || type === 'quote'}
                 className="w-full resize-none rounded-2xl border border-white/10 bg-white/[0.06] px-4 py-3 text-sm leading-6 text-white outline-none transition placeholder:text-white/25 focus:border-purple-200/45"
               />
             </label>
+
+            {type === 'quote' && (
+              <motion.div
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: 'auto' }}
+                className="mt-6 grid gap-4 border-t border-white/10 pt-6 text-left"
+              >
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <label className="block">
+                    <span className="mb-2 block text-xs uppercase tracking-[0.22em] text-white/45">Wie heeft dit gezegd? (optioneel)</span>
+                    <input
+                      value={quoteBy}
+                      maxLength={60}
+                      onChange={(event) => setQuoteBy(event.target.value)}
+                      placeholder="Bijv. Jens, of een vriend"
+                      className="w-full rounded-2xl border border-white/10 bg-white/[0.06] px-4 py-3 text-sm text-white outline-none transition placeholder:text-white/25 focus:border-purple-200/45"
+                    />
+                  </label>
+
+                  <div className="grid gap-3 grid-cols-2">
+                    <label className="block">
+                      <span className="mb-2 block text-xs uppercase tracking-[0.22em] text-white/45">Maand (optioneel)</span>
+                      <select
+                        value={quoteMonth}
+                        onChange={(event) => setQuoteMonth(event.target.value)}
+                        className="w-full rounded-2xl border border-white/10 bg-white/[0.06] px-4 py-[14px] text-sm text-white outline-none transition focus:border-purple-200/45 [&>option]:bg-[#18181b] [&>option]:text-white"
+                      >
+                        <option value="">Selecteer...</option>
+                        {DUTCH_MONTHS.map((m) => (
+                          <option key={m} value={m.toLowerCase()}>{m}</option>
+                        ))}
+                      </select>
+                    </label>
+
+                    <label className="block">
+                      <span className="mb-2 block text-xs uppercase tracking-[0.22em] text-white/45">Jaar (optioneel)</span>
+                      <input
+                        type="text"
+                        value={quoteYear}
+                        maxLength={4}
+                        onChange={(event) => setQuoteYear(event.target.value.replace(/\D/g, ''))}
+                        placeholder="Bijv. 2023"
+                        className="w-full rounded-2xl border border-white/10 bg-white/[0.06] px-4 py-3 text-sm text-white outline-none transition placeholder:text-white/25 focus:border-purple-200/45"
+                      />
+                    </label>
+                  </div>
+                </div>
+
+                <label className="block">
+                  <span className="mb-2 flex items-center justify-between text-xs uppercase tracking-[0.22em] text-white/45">
+                    <span>Context / Toelichting (optioneel)</span>
+                    <span className="tracking-normal text-white/25">{quoteContext.length}/500</span>
+                  </span>
+                  <textarea
+                    value={quoteContext}
+                    maxLength={500}
+                    onChange={(event) => setQuoteContext(event.target.value)}
+                    placeholder="Voeg wat context of een korte toelichting toe..."
+                    rows={3}
+                    className="w-full resize-none rounded-2xl border border-white/10 bg-white/[0.06] px-4 py-3 text-sm leading-6 text-white outline-none transition placeholder:text-white/25 focus:border-purple-200/45"
+                  />
+                </label>
+              </motion.div>
+            )}
 
             {submitted && (
               <div className="mt-4 rounded-2xl border border-emerald-300/20 bg-emerald-300/10 px-4 py-3 text-sm text-emerald-100">

@@ -314,18 +314,65 @@ function MemoryAdminCard({ memory, busy, onDelete, onUpdate, onToggleCore }) {
   const [editing, setEditing] = useState(false)
   const [form, setForm] = useState({ title: memory.title, author: memory.author, body: memory.body })
 
+  const isQuote = memory.type === 'quote'
+  const [quoteForm, setQuoteForm] = useState({
+    quote: memory.quoteData?.quote ?? memory.body,
+    quoteBy: memory.quoteData?.quoteBy ?? '',
+    month: memory.quoteData?.month ?? '',
+    year: memory.quoteData?.year ?? '',
+    context: memory.quoteData?.context ?? '',
+  })
+
   function resetForm() {
     setForm({ title: memory.title, author: memory.author, body: memory.body })
+    setQuoteForm({
+      quote: memory.quoteData?.quote ?? memory.body,
+      quoteBy: memory.quoteData?.quoteBy ?? '',
+      month: memory.quoteData?.month ?? '',
+      year: memory.quoteData?.year ?? '',
+      context: memory.quoteData?.context ?? '',
+    })
     setEditing(false)
+  }
+
+  useEffect(() => {
+    setForm({ title: memory.title, author: memory.author, body: memory.body })
+    setQuoteForm({
+      quote: memory.quoteData?.quote ?? memory.body,
+      quoteBy: memory.quoteData?.quoteBy ?? '',
+      month: memory.quoteData?.month ?? '',
+      year: memory.quoteData?.year ?? '',
+      context: memory.quoteData?.context ?? '',
+    })
+  }, [memory])
+
+  const handleQuoteBodyChange = (value) => {
+    const lines = value.split('\n')
+    if (lines.length > 6) {
+      return
+    }
+    setQuoteForm({ ...quoteForm, quote: value })
   }
 
   async function handleSubmit(event) {
     event.preventDefault()
     if (!form.title.trim()) return
+
+    let finalBody = form.body.trim()
+    if (isQuote) {
+      finalBody = JSON.stringify({
+        quote: quoteForm.quote.trim(),
+        quoteBy: quoteForm.quoteBy.trim(),
+        month: quoteForm.month,
+        year: quoteForm.year.trim(),
+        context: quoteForm.context.trim(),
+      })
+    }
+
     await onUpdate(memory, {
       title: form.title.trim(),
       author: form.author.trim(),
-      body: form.body.trim(),
+      body: finalBody,
     })
     setEditing(false)
   }
@@ -364,15 +411,98 @@ function MemoryAdminCard({ memory, busy, onDelete, onUpdate, onToggleCore }) {
 
         {editing ? (
           <form onSubmit={handleSubmit} className="grid gap-3">
-            <input value={form.title} maxLength={ADMIN_FIELD_LIMITS.title} onChange={(event) => setForm({ ...form, title: event.target.value })} className="rounded-2xl border border-white/10 bg-white/[0.06] px-4 py-3 text-sm text-white outline-none focus:border-purple-200/45" placeholder="Titel" />
-            <input value={form.author} maxLength={ADMIN_FIELD_LIMITS.author} onChange={(event) => setForm({ ...form, author: event.target.value })} className="rounded-2xl border border-white/10 bg-white/[0.06] px-4 py-3 text-sm text-white outline-none focus:border-purple-200/45" placeholder="Naam optioneel" />
-            <label>
-              <span className="mb-2 flex justify-between text-xs uppercase tracking-[0.18em] text-white/35">
-                Tekst
-                <span className="tracking-normal">{form.body.length}/{ADMIN_FIELD_LIMITS.body}</span>
-              </span>
-              <textarea value={form.body} maxLength={ADMIN_FIELD_LIMITS.body} onChange={(event) => setForm({ ...form, body: event.target.value })} rows={4} className="w-full resize-none rounded-2xl border border-white/10 bg-white/[0.06] px-4 py-3 text-sm leading-6 text-white outline-none focus:border-purple-200/45" placeholder="Tekst of context" />
-            </label>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <label className="block">
+                <span className="mb-1 block text-[0.65rem] uppercase tracking-wider text-white/35">Titel</span>
+                <input value={form.title} maxLength={ADMIN_FIELD_LIMITS.title} onChange={(event) => setForm({ ...form, title: event.target.value })} className="w-full rounded-2xl border border-white/10 bg-white/[0.06] px-4 py-3 text-sm text-white outline-none focus:border-purple-200/45" placeholder="Titel" />
+              </label>
+              <label className="block">
+                <span className="mb-1 block text-[0.65rem] uppercase tracking-wider text-white/35">Ingezonden door</span>
+                <input value={form.author} maxLength={ADMIN_FIELD_LIMITS.author} onChange={(event) => setForm({ ...form, author: event.target.value })} className="w-full rounded-2xl border border-white/10 bg-white/[0.06] px-4 py-3 text-sm text-white outline-none focus:border-purple-200/45" placeholder="Naam van de inzender" />
+              </label>
+            </div>
+
+            {isQuote ? (
+              <div className="grid gap-3 text-left">
+                <label className="block">
+                  <span className="mb-1 flex justify-between text-[0.65rem] uppercase tracking-wider text-white/35">
+                    Quote
+                    <span className="tracking-normal">{quoteForm.quote.length}/500</span>
+                  </span>
+                  <textarea
+                    value={quoteForm.quote}
+                    maxLength={500}
+                    onChange={(event) => handleQuoteBodyChange(event.target.value)}
+                    rows={4}
+                    className="w-full resize-none rounded-2xl border border-white/10 bg-white/[0.06] px-4 py-3 text-sm leading-6 text-white outline-none focus:border-purple-200/45 whitespace-pre-wrap"
+                    placeholder="De quote zelf (max. 6 regels)"
+                    required
+                  />
+                </label>
+
+                <div className="grid gap-3 sm:grid-cols-3">
+                  <label className="block">
+                    <span className="mb-1 block text-[0.65rem] uppercase tracking-wider text-white/35">Wie heeft dit gezegd?</span>
+                    <input
+                      value={quoteForm.quoteBy}
+                      maxLength={60}
+                      onChange={(event) => setQuoteForm({ ...quoteForm, quoteBy: event.target.value })}
+                      className="w-full rounded-2xl border border-white/10 bg-white/[0.06] px-4 py-[11px] text-sm text-white outline-none focus:border-purple-200/45"
+                      placeholder="Bijv. Jens"
+                    />
+                  </label>
+
+                  <label className="block">
+                    <span className="mb-1 block text-[0.65rem] uppercase tracking-wider text-white/35">Maand</span>
+                    <select
+                      value={quoteForm.month}
+                      onChange={(event) => setQuoteForm({ ...quoteForm, month: event.target.value })}
+                      className="w-full rounded-2xl border border-white/10 bg-white/[0.06] px-4 py-[12px] text-sm text-white outline-none focus:border-purple-200/45 [&>option]:bg-[#18181b] [&>option]:text-white"
+                    >
+                      <option value="">Selecteer...</option>
+                      {['Januari', 'Februari', 'Maart', 'April', 'Mei', 'Juni', 'Juli', 'Augustus', 'September', 'Oktober', 'November', 'December'].map((m) => (
+                        <option key={m} value={m.toLowerCase()}>{m}</option>
+                      ))}
+                    </select>
+                  </label>
+
+                  <label className="block">
+                    <span className="mb-1 block text-[0.65rem] uppercase tracking-wider text-white/35">Jaar</span>
+                    <input
+                      value={quoteForm.year}
+                      maxLength={4}
+                      onChange={(event) => setQuoteForm({ ...quoteForm, year: event.target.value.replace(/\D/g, '') })}
+                      className="w-full rounded-2xl border border-white/10 bg-white/[0.06] px-4 py-[11px] text-sm text-white outline-none focus:border-purple-200/45"
+                      placeholder="Bijv. 2023"
+                    />
+                  </label>
+                </div>
+
+                <label className="block">
+                  <span className="mb-1 flex justify-between text-[0.65rem] uppercase tracking-wider text-white/35">
+                    Context / Toelichting
+                    <span className="tracking-normal">{quoteForm.context.length}/500</span>
+                  </span>
+                  <textarea
+                    value={quoteForm.context}
+                    maxLength={500}
+                    onChange={(event) => setQuoteForm({ ...quoteForm, context: event.target.value })}
+                    rows={3}
+                    className="w-full resize-none rounded-2xl border border-white/10 bg-white/[0.06] px-4 py-3 text-sm leading-6 text-white outline-none focus:border-purple-200/45"
+                    placeholder="Uitleg of toelichting bij de quote..."
+                  />
+                </label>
+              </div>
+            ) : (
+              <label className="block">
+                <span className="mb-1 flex justify-between text-[0.65rem] uppercase tracking-wider text-white/35">
+                  Tekst
+                  <span className="tracking-normal">{form.body.length}/{ADMIN_FIELD_LIMITS.body}</span>
+                </span>
+                <textarea value={form.body} maxLength={ADMIN_FIELD_LIMITS.body} onChange={(event) => setForm({ ...form, body: event.target.value })} rows={4} className="w-full resize-none rounded-2xl border border-white/10 bg-white/[0.06] px-4 py-3 text-sm leading-6 text-white outline-none focus:border-purple-200/45" placeholder="Tekst of context" />
+              </label>
+            )}
+
             <div className="flex flex-wrap gap-2">
               <button type="submit" disabled={busy} className="inline-flex items-center gap-2 rounded-full border border-emerald-200/20 px-4 py-2 text-xs text-emerald-100 transition hover:bg-emerald-300/10 disabled:opacity-50">
                 <Save size={14} />
@@ -387,8 +517,12 @@ function MemoryAdminCard({ memory, busy, onDelete, onUpdate, onToggleCore }) {
         ) : (
           <>
             <h2 className="text-xl font-light text-white">{memory.title}</h2>
-            {memory.author && <p className="mt-1 text-xs text-white/45">Toegevoegd door {memory.author}</p>}
-            {memory.body && <p className="mt-3 line-clamp-2 text-sm leading-6 text-white/55">{memory.body}</p>}
+            {memory.author && <p className="mt-1 text-xs text-white/45">Ingezonden door {memory.author}</p>}
+            {memory.body && (
+              <p className="mt-3 line-clamp-2 text-sm leading-6 text-white/55 whitespace-pre-wrap">
+                {memory.type === 'quote' && memory.quoteData ? memory.quoteData.quote : memory.body}
+              </p>
+            )}
             <p className="mt-3 break-all text-[0.7rem] text-white/25">{memory.id}</p>
           </>
         )}

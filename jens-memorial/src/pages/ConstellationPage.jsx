@@ -1005,13 +1005,53 @@ function MemoryOverlay({ memory, candleLit, onToggleCandle, onClose, onPrevious,
           </div>
         )}
 
-        {memory.body && (
-          <div className="my-7 rounded-2xl border border-purple-200/10 bg-white/[0.03] p-6">
-            <p className={memory.type === 'quote' ? 'text-2xl font-light leading-relaxed' : 'text-sm leading-7'} style={{ color: 'var(--text-primary)' }}>
-              {memory.body}
-            </p>
-          </div>
-        )}
+        {(() => {
+          const isQuoteJson = memory.type === 'quote' && memory.quoteData
+          const quoteText = isQuoteJson ? memory.quoteData.quote : memory.body
+          const quoteBy = isQuoteJson ? memory.quoteData.quoteBy : null
+          const month = isQuoteJson ? memory.quoteData.month : null
+          const year = isQuoteJson ? memory.quoteData.year : null
+          const context = isQuoteJson ? memory.quoteData.context : null
+
+          const dateParts = []
+          if (month) dateParts.push(month)
+          if (year) dateParts.push(year)
+          const dateString = dateParts.join(' ')
+
+          if (memory.type === 'quote') {
+            return (
+              <div className="my-7">
+                <div className="rounded-2xl border border-purple-200/10 bg-white/[0.03] p-6">
+                  <p className="text-2xl font-light leading-relaxed whitespace-pre-wrap" style={{ color: 'var(--text-primary)' }}>
+                    {quoteText}
+                  </p>
+                  {(quoteBy || dateString) && (
+                    <p className="mt-4 text-right text-sm italic" style={{ color: 'var(--text-muted)' }}>
+                      — {quoteBy || ''}{quoteBy && dateString ? ', ' : ''}{dateString}
+                    </p>
+                  )}
+                </div>
+                {context && (
+                  <div className="mt-4 rounded-2xl border border-purple-200/10 bg-white/[0.01] p-5">
+                    <p className="text-sm leading-7 whitespace-pre-wrap" style={{ color: 'var(--text-muted)' }}>
+                      {context}
+                    </p>
+                  </div>
+                )}
+              </div>
+            )
+          }
+
+          return (
+            memory.body && (
+              <div className="my-7 rounded-2xl border border-purple-200/10 bg-white/[0.03] p-6">
+                <p className="text-sm leading-7 whitespace-pre-wrap" style={{ color: 'var(--text-primary)' }}>
+                  {memory.body}
+                </p>
+              </div>
+            )
+          )
+        })()}
 
         <div className="flex items-center justify-between gap-4">
           <button
