@@ -285,6 +285,7 @@ export default function ConstellationPage() {
 
   const selectedMemoryRef = useRef(null)
   const showRevealOverlayRef = useRef(true)
+  const hoveredNodeRef = useRef(null)
 
   useEffect(() => {
     selectedMemoryRef.current = selectedMemory
@@ -350,7 +351,6 @@ export default function ConstellationPage() {
     const graph = ForceGraph3D()(graphRef.current)
       .graphData(graphData)
       .backgroundColor('rgba(0,0,0,0)')
-      .nodeLabel((node) => `${node.title} · ${node.type}`)
       .nodeColor((node) => (node.isCoreMemory ? CORE_MEMORY_COLOR : MEMORY_TYPE_COLORS[node.type] ?? '#c4b5fd'))
       .nodeVal((node) => (node.isCoreMemory ? 5.4 : 2.4))
       .linkColor((link) => (link.source?.isCoreMemory || link.target?.isCoreMemory ? 'rgba(245,158,11,0.34)' : 'rgba(190,174,255,0.24)'))
@@ -358,6 +358,13 @@ export default function ConstellationPage() {
       .linkOpacity(0.58)
       .enableNodeDrag(false)
       .showNavInfo(false)
+      .onNodeHover((node) => {
+        hoveredNodeRef.current = node
+        const canvasEl = graphRef.current?.querySelector('canvas')
+        if (canvasEl) {
+          canvasEl.style.cursor = node ? 'pointer' : 'default'
+        }
+      })
       .onNodeClick((node) => {
         setSelectedMemory(node)
 
@@ -470,59 +477,84 @@ export default function ConstellationPage() {
         controls.update()
       }
 
-      // Mobile center-node focus label update
-      const focusPill = document.getElementById('mobile-node-focus-pill')
-      const focusTitle = document.getElementById('mobile-node-focus-title')
-      const focusType = document.getElementById('mobile-node-focus-type')
-      const focusDot = document.getElementById('mobile-node-focus-dot')
+      // Mobile & PC node hover/focus custom tooltip update
+      const tooltip = document.getElementById('node-hover-tooltip')
+      const tooltipTitle = document.getElementById('node-tooltip-title')
+      const tooltipType = document.getElementById('node-tooltip-type')
+      const tooltipDot = document.getElementById('node-tooltip-dot')
 
-      if (
-        window.innerWidth < 768 &&
-        !selectedMemoryRef.current &&
-        !showRevealOverlayRef.current &&
-        focusPill &&
-        focusTitle &&
-        focusType &&
-        focusDot
-      ) {
-        const camera = graph.camera()
-        const nodes = graph.graphData().nodes
-        let closestNode = null
-        let minDistance = Infinity
-        const tempV = new THREE.Vector3()
+      if (tooltip && tooltipTitle && tooltipType && tooltipDot) {
+        const isMobile = window.innerWidth < 768
+        let activeNode = null
 
-        nodes.forEach((node) => {
-          if (node.x === undefined || node.y === undefined || node.z === undefined) return
+        if (selectedMemoryRef.current || showRevealOverlayRef.current) {
+          activeNode = null
+        } else if (isMobile) {
+          // Mobile center-node focus logic
+          const camera = graph.camera()
+          const nodes = graph.graphData().nodes
+          let minDistance = Infinity
+          const tempV = new THREE.Vector3()
+          const camPos = camera.position
 
-          tempV.set(node.x, node.y, node.z)
+          nodes.forEach((node) => {
+            if (node.x === undefined || node.y === undefined || node.z === undefined) return
+
+            // Hemisphere check: only select nodes on the side facing the camera.
+            // (0,0,0) is the center of the constellation.
+            const dot = node.x * camPos.x + node.y * camPos.y + node.z * camPos.z
+            if (dot <= 0) return // Skip nodes on the backside
+
+            tempV.set(node.x, node.y, node.z)
+            tempV.project(camera)
+
+            if (tempV.z <= 1) {
+              const distance = Math.hypot(tempV.x, tempV.y)
+              if (distance < minDistance) {
+                minDistance = distance
+                activeNode = node
+              }
+            }
+          })
+
+          // Only show if the closest frontside node is within a 35% radius of the screen center
+          if (minDistance > 0.35) {
+            activeNode = null
+          }
+        } else {
+          // PC hovered-node logic
+          activeNode = hoveredNodeRef.current
+        }
+
+        // Project and position the tooltip exactly above the node in 2D pixels
+        if (activeNode && activeNode.x !== undefined && activeNode.y !== undefined && activeNode.z !== undefined) {
+          const camera = graph.camera()
+          const tempV = new THREE.Vector3(activeNode.x, activeNode.y, activeNode.z)
           tempV.project(camera)
 
-          if (tempV.z <= 1) {
-            const distance = Math.hypot(tempV.x, tempV.y)
-            if (distance < minDistance) {
-              minDistance = distance
-              closestNode = node
-            }
+          const width = window.innerWidth
+          const height = window.innerHeight
+
+          const screenX = (tempV.x * 0.5 + 0.5) * width
+          const screenY = (-tempV.y * 0.5 + 0.5) * height
+
+          const typeColors = {
+            foto: '#ffffff',
+            video: '#997fff',
+            quote: '#95ff9a',
+            tekst: '#7dd3fc',
           }
-        })
 
-        const typeColors = {
-          foto: '#ffffff',
-          video: '#997fff',
-          quote: '#95ff9a',
-          tekst: '#7dd3fc',
-        }
+          tooltipTitle.textContent = activeNode.title
+          tooltipType.textContent = activeNode.type
+          tooltipDot.style.backgroundColor = typeColors[activeNode.type] || '#ffffff'
 
-        if (closestNode && minDistance < 0.3) {
-          focusTitle.textContent = closestNode.title
-          focusType.textContent = closestNode.type
-          focusDot.style.backgroundColor = typeColors[closestNode.type] || '#ffffff'
-          focusPill.style.opacity = '1'
+          tooltip.style.left = `${screenX}px`
+          tooltip.style.top = `${screenY}px`
+          tooltip.style.opacity = '1'
         } else {
-          focusPill.style.opacity = '0'
+          tooltip.style.opacity = '0'
         }
-      } else if (focusPill) {
-        focusPill.style.opacity = '0'
       }
 
       animationFrameRef.current = requestAnimationFrame(animateScene)
@@ -718,15 +750,18 @@ export default function ConstellationPage() {
       />
       <div ref={graphRef} className={`absolute inset-0 transition-opacity duration-700 ${showRevealOverlay ? 'opacity-0' : 'opacity-100'}`} />
 
-      {/* Mobile viewport-centered node tooltip */}
+      {/* Dynamic connected tooltip (floats exactly above target node on both PC and Mobile) */}
       <div
-        id="mobile-node-focus-pill"
-        className="pointer-events-none absolute left-1/2 z-20 -translate-x-1/2 flex items-center gap-2 rounded-full border border-white/10 bg-black/55 px-4 py-2 text-center text-xs text-white/95 shadow-2xl backdrop-blur-md transition-opacity duration-300 opacity-0 md:hidden"
-        style={{ top: '6.5rem' }}
+        id="node-hover-tooltip"
+        className="pointer-events-none absolute z-20 flex flex-col items-center -translate-x-1/2 -translate-y-[calc(100%+8px)] transition-opacity duration-200 opacity-0 select-none"
+        style={{ left: 0, top: 0 }}
       >
-        <span id="mobile-node-focus-dot" className="h-2 w-2 rounded-full transition-colors duration-300"></span>
-        <span id="mobile-node-focus-title" className="font-medium max-w-[150px] truncate"></span>
-        <span id="mobile-node-focus-type" className="opacity-45 uppercase tracking-wider text-[9px] font-semibold"></span>
+        <div className="flex items-center gap-1.5 rounded-full border border-white/10 bg-black/75 px-3 py-1.5 text-xs text-white/95 shadow-2xl backdrop-blur-md">
+          <span id="node-tooltip-dot" className="h-1.5 w-1.5 rounded-full bg-white transition-colors duration-300"></span>
+          <span id="node-tooltip-title" className="font-light truncate max-w-[140px]"></span>
+          <span id="node-tooltip-type" className="opacity-45 uppercase tracking-wider text-[8px] font-semibold"></span>
+        </div>
+        <div className="w-[1px] h-3 bg-white/20 mt-0.5"></div>
       </div>
 
       <button
