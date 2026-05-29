@@ -283,6 +283,17 @@ export default function ConstellationPage() {
   const graphData = useMemo(() => ({ nodes: memories, links: createLinks(memories) }), [memories])
   const showRevealOverlay = !revealReady || loadingMemories
 
+  const selectedMemoryRef = useRef(null)
+  const showRevealOverlayRef = useRef(true)
+
+  useEffect(() => {
+    selectedMemoryRef.current = selectedMemory
+  }, [selectedMemory])
+
+  useEffect(() => {
+    showRevealOverlayRef.current = showRevealOverlay
+  }, [showRevealOverlay])
+
   useEffect(() => {
     const timer = window.setTimeout(() => {
       setRevealReady(true)
@@ -457,6 +468,61 @@ export default function ConstellationPage() {
       if (controls) {
         controls.target.set(0, 0, 0)
         controls.update()
+      }
+
+      // Mobile center-node focus label update
+      const focusPill = document.getElementById('mobile-node-focus-pill')
+      const focusTitle = document.getElementById('mobile-node-focus-title')
+      const focusType = document.getElementById('mobile-node-focus-type')
+      const focusDot = document.getElementById('mobile-node-focus-dot')
+
+      if (
+        window.innerWidth < 768 &&
+        !selectedMemoryRef.current &&
+        !showRevealOverlayRef.current &&
+        focusPill &&
+        focusTitle &&
+        focusType &&
+        focusDot
+      ) {
+        const camera = graph.camera()
+        const nodes = graph.graphData().nodes
+        let closestNode = null
+        let minDistance = Infinity
+        const tempV = new THREE.Vector3()
+
+        nodes.forEach((node) => {
+          if (node.x === undefined || node.y === undefined || node.z === undefined) return
+
+          tempV.set(node.x, node.y, node.z)
+          tempV.project(camera)
+
+          if (tempV.z <= 1) {
+            const distance = Math.hypot(tempV.x, tempV.y)
+            if (distance < minDistance) {
+              minDistance = distance
+              closestNode = node
+            }
+          }
+        })
+
+        const typeColors = {
+          foto: '#ffffff',
+          video: '#997fff',
+          quote: '#95ff9a',
+          tekst: '#7dd3fc',
+        }
+
+        if (closestNode && minDistance < 0.3) {
+          focusTitle.textContent = closestNode.title
+          focusType.textContent = closestNode.type
+          focusDot.style.backgroundColor = typeColors[closestNode.type] || '#ffffff'
+          focusPill.style.opacity = '1'
+        } else {
+          focusPill.style.opacity = '0'
+        }
+      } else if (focusPill) {
+        focusPill.style.opacity = '0'
       }
 
       animationFrameRef.current = requestAnimationFrame(animateScene)
@@ -651,6 +717,17 @@ export default function ConstellationPage() {
         }}
       />
       <div ref={graphRef} className={`absolute inset-0 transition-opacity duration-700 ${showRevealOverlay ? 'opacity-0' : 'opacity-100'}`} />
+
+      {/* Mobile viewport-centered node tooltip */}
+      <div
+        id="mobile-node-focus-pill"
+        className="pointer-events-none absolute left-1/2 z-20 -translate-x-1/2 flex items-center gap-2 rounded-full border border-white/10 bg-black/55 px-4 py-2 text-center text-xs text-white/95 shadow-2xl backdrop-blur-md transition-opacity duration-300 opacity-0 md:hidden"
+        style={{ top: '6.5rem' }}
+      >
+        <span id="mobile-node-focus-dot" className="h-2 w-2 rounded-full transition-colors duration-300"></span>
+        <span id="mobile-node-focus-title" className="font-medium max-w-[150px] truncate"></span>
+        <span id="mobile-node-focus-type" className="opacity-45 uppercase tracking-wider text-[9px] font-semibold"></span>
+      </div>
 
       <button
         type="button"
