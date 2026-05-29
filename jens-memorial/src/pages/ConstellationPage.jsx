@@ -495,17 +495,29 @@ export default function ConstellationPage() {
           const nodes = graph.graphData().nodes
           let minDistance = Infinity
           const tempV = new THREE.Vector3()
+          const tempV2 = new THREE.Vector3()
           const camPos = camera.position
 
           nodes.forEach((node) => {
-            if (node.x === undefined || node.y === undefined || node.z === undefined) return
+            let wx = node.x
+            let wy = node.y
+            let wz = node.z
+
+            if (node.__threeObj) {
+              node.__threeObj.getWorldPosition(tempV2)
+              wx = tempV2.x
+              wy = tempV2.y
+              wz = tempV2.z
+            } else if (node.x === undefined || node.y === undefined || node.z === undefined) {
+              return
+            }
 
             // Hemisphere check: only select nodes on the side facing the camera.
             // (0,0,0) is the center of the constellation.
-            const dot = node.x * camPos.x + node.y * camPos.y + node.z * camPos.z
+            const dot = wx * camPos.x + wy * camPos.y + wz * camPos.z
             if (dot <= 0) return // Skip nodes on the backside
 
-            tempV.set(node.x, node.y, node.z)
+            tempV.set(wx, wy, wz)
             tempV.project(camera)
 
             if (tempV.z <= 1) {
@@ -526,10 +538,17 @@ export default function ConstellationPage() {
           activeNode = hoveredNodeRef.current
         }
 
-        // Project and position the tooltip exactly above the node in 2D pixels
+        // Project and position the tooltip exactly above the node in 2D pixels using world position
         if (activeNode && activeNode.x !== undefined && activeNode.y !== undefined && activeNode.z !== undefined) {
           const camera = graph.camera()
-          const tempV = new THREE.Vector3(activeNode.x, activeNode.y, activeNode.z)
+          const tempV = new THREE.Vector3()
+          
+          if (activeNode.__threeObj) {
+            activeNode.__threeObj.getWorldPosition(tempV)
+          } else {
+            tempV.set(activeNode.x, activeNode.y, activeNode.z)
+          }
+          
           tempV.project(camera)
 
           const width = window.innerWidth
@@ -753,7 +772,7 @@ export default function ConstellationPage() {
       {/* Dynamic connected tooltip (floats exactly above target node on both PC and Mobile) */}
       <div
         id="node-hover-tooltip"
-        className="pointer-events-none absolute z-20 flex flex-col items-center -translate-x-1/2 -translate-y-[calc(100%+8px)] transition-opacity duration-200 opacity-0 select-none"
+        className="pointer-events-none absolute z-20 flex flex-col items-center -translate-x-1/2 -translate-y-[calc(100%+6px)] transition-opacity duration-200 opacity-0 select-none"
         style={{ left: 0, top: 0 }}
       >
         <div className="flex items-center gap-1.5 rounded-full border border-white/10 bg-black/75 px-3 py-1.5 text-xs text-white/95 shadow-2xl backdrop-blur-md">
@@ -761,7 +780,6 @@ export default function ConstellationPage() {
           <span id="node-tooltip-title" className="font-light truncate max-w-[140px]"></span>
           <span id="node-tooltip-type" className="opacity-45 uppercase tracking-wider text-[8px] font-semibold"></span>
         </div>
-        <div className="w-[1px] h-3 bg-white/20 mt-0.5"></div>
       </div>
 
       <button
