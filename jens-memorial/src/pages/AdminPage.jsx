@@ -312,7 +312,9 @@ export default function AdminPage() {
 function MemoryAdminCard({ memory, busy, onDelete, onUpdate, onToggleCore }) {
   const Icon = TYPE_ICONS[memory.type] ?? Quote
   const [editing, setEditing] = useState(false)
-  const [form, setForm] = useState({ title: memory.title, author: memory.author, body: memory.body })
+  const isCollage = !!memory.collageData
+  const initialBody = memory.collageData ? memory.collageData.caption ?? '' : memory.body
+  const [form, setForm] = useState({ title: memory.title, author: memory.author, body: initialBody })
 
   const isQuote = memory.type === 'quote'
   const [quoteForm, setQuoteForm] = useState({
@@ -324,7 +326,7 @@ function MemoryAdminCard({ memory, busy, onDelete, onUpdate, onToggleCore }) {
   })
 
   function resetForm() {
-    setForm({ title: memory.title, author: memory.author, body: memory.body })
+    setForm({ title: memory.title, author: memory.author, body: memory.collageData ? memory.collageData.caption ?? '' : memory.body })
     setQuoteForm({
       quote: memory.quoteData?.quote ?? memory.body,
       quoteBy: memory.quoteData?.quoteBy ?? '',
@@ -336,7 +338,7 @@ function MemoryAdminCard({ memory, busy, onDelete, onUpdate, onToggleCore }) {
   }
 
   useEffect(() => {
-    setForm({ title: memory.title, author: memory.author, body: memory.body })
+    setForm({ title: memory.title, author: memory.author, body: memory.collageData ? memory.collageData.caption ?? '' : memory.body })
     setQuoteForm({
       quote: memory.quoteData?.quote ?? memory.body,
       quoteBy: memory.quoteData?.quoteBy ?? '',
@@ -367,6 +369,11 @@ function MemoryAdminCard({ memory, busy, onDelete, onUpdate, onToggleCore }) {
         year: quoteForm.year.trim(),
         context: quoteForm.context.trim(),
       })
+    } else if (isCollage) {
+      finalBody = JSON.stringify({
+        ...memory.collageData,
+        caption: form.body.trim(),
+      })
     }
 
     await onUpdate(memory, {
@@ -395,7 +402,11 @@ function MemoryAdminCard({ memory, busy, onDelete, onUpdate, onToggleCore }) {
 
       <div>
         <div className="mb-2 flex flex-wrap items-center gap-2">
-          <span className="rounded-full border border-white/10 px-3 py-1 text-[0.65rem] uppercase tracking-[0.18em] text-white/45">{memory.type}</span>
+          {memory.collageData ? (
+            <span className="rounded-full border border-purple-200/30 bg-purple-300/10 px-3 py-1 text-[0.65rem] uppercase tracking-[0.18em] text-purple-100">Collage ({memory.collageData.assets?.length ?? 0} items)</span>
+          ) : (
+            <span className="rounded-full border border-white/10 px-3 py-1 text-[0.65rem] uppercase tracking-[0.18em] text-white/45">{memory.type}</span>
+          )}
           <span className="rounded-full border border-white/10 px-3 py-1 text-[0.65rem] uppercase tracking-[0.18em] text-white/45">{formatDate(memory.createdAt)}</span>
           <span className="inline-flex items-center gap-1 rounded-full border border-white/10 px-3 py-1 text-[0.65rem] uppercase tracking-[0.18em] text-white/45">
             <Flame size={12} />
@@ -496,7 +507,7 @@ function MemoryAdminCard({ memory, busy, onDelete, onUpdate, onToggleCore }) {
             ) : (
               <label className="block">
                 <span className="mb-1 flex justify-between text-[0.65rem] uppercase tracking-wider text-white/35">
-                  Tekst
+                  Tekst / Bijschrift
                   <span className="tracking-normal">{form.body.length}/{ADMIN_FIELD_LIMITS.body}</span>
                 </span>
                 <textarea value={form.body} maxLength={ADMIN_FIELD_LIMITS.body} onChange={(event) => setForm({ ...form, body: event.target.value })} rows={4} className="w-full resize-none rounded-2xl border border-white/10 bg-white/[0.06] px-4 py-3 text-sm leading-6 text-white outline-none focus:border-purple-200/45" placeholder="Tekst of context" />
@@ -518,9 +529,9 @@ function MemoryAdminCard({ memory, busy, onDelete, onUpdate, onToggleCore }) {
           <>
             <h2 className="text-xl font-light text-white">{memory.title}</h2>
             {memory.author && <p className="mt-1 text-xs text-white/45">Ingezonden door {memory.author}</p>}
-            {memory.body && (
+            {(memory.collageData ? memory.collageData.caption : (memory.type === 'quote' && memory.quoteData ? memory.quoteData.quote : memory.body)) && (
               <p className="mt-3 line-clamp-2 text-sm leading-6 text-white/55 whitespace-pre-wrap">
-                {memory.type === 'quote' && memory.quoteData ? memory.quoteData.quote : memory.body}
+                {memory.collageData ? memory.collageData.caption : (memory.type === 'quote' && memory.quoteData ? memory.quoteData.quote : memory.body)}
               </p>
             )}
             <p className="mt-3 break-all text-[0.7rem] text-white/25">{memory.id}</p>

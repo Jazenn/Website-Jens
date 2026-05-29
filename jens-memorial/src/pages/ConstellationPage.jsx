@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom'
 import ForceGraph3D from '3d-force-graph'
 import * as THREE from 'three'
 import { AnimatePresence, motion } from 'framer-motion'
-import { Heart, Music, Pause, PenLine, Play, SkipBack, SkipForward, Shield, User, Volume2, VolumeX, X } from 'lucide-react'
+import { Heart, Music, Pause, PenLine, Play, SkipBack, SkipForward, Shield, User, Volume2, VolumeX, X, ChevronLeft, ChevronRight } from 'lucide-react'
 import { useAmbientAudio } from '../context/AmbientAudioContext'
 import { useAuth } from '../context/AuthContext'
 import { useMusicPlayer } from '../context/MusicPlayerContext'
@@ -952,6 +952,29 @@ function VideoPlayer({ src, poster }) {
 
 function MemoryOverlay({ memory, candleLit, onToggleCandle, onClose, onPrevious, onNext }) {
   const { unduck } = useAmbientAudio()
+  const [carouselIndex, setCarouselIndex] = useState(0)
+
+  const touchStartX = useRef(0)
+  const touchEndX = useRef(0)
+
+  const handleTouchStart = (e) => {
+    touchStartX.current = e.changedTouches[0].screenX
+  }
+
+  const handleTouchEnd = (e) => {
+    touchEndX.current = e.changedTouches[0].screenX
+    const diff = touchStartX.current - touchEndX.current
+    const assets = memory.collageData?.assets || []
+    if (!assets.length) return
+
+    if (diff > 50) {
+      // Swipe left -> next slide
+      setCarouselIndex((prev) => Math.min(prev + 1, assets.length - 1))
+    } else if (diff < -50) {
+      // Swipe right -> prev slide
+      setCarouselIndex((prev) => Math.max(prev - 1, 0))
+    }
+  }
 
   useEffect(() => {
     return () => {
@@ -959,6 +982,10 @@ function MemoryOverlay({ memory, candleLit, onToggleCandle, onClose, onPrevious,
       unduck()
     }
   }, [unduck])
+
+  useEffect(() => {
+    setCarouselIndex(0)
+  }, [memory])
 
   return (
     <motion.div
@@ -984,26 +1011,104 @@ function MemoryOverlay({ memory, candleLit, onToggleCandle, onClose, onPrevious,
         </button>
 
         <p className="mb-4 text-xs uppercase tracking-[0.3em]" style={{ color: memory.special ? 'var(--accent-gold)' : 'var(--text-muted)' }}>
-          {memory.type} · {memory.date}
+          {memory.collageData ? 'collage' : memory.type} · {memory.date}
         </p>
         <h2 className="pr-10 text-3xl font-light leading-tight" style={{ color: 'var(--text-primary)' }}>
           {memory.title}
         </h2>
         {memory.author && (
           <p className="mt-2 text-sm" style={{ color: 'var(--text-muted)' }}>
-            Toegevoegd door {memory.author}
+            Ingezonden door {memory.author}
           </p>
         )}
 
-        {memory.mediaUrl && (
-          <div className="mt-6 overflow-hidden rounded-2xl border border-purple-200/10 bg-black/25">
-            {memory.mediaResourceType === 'video' || memory.type === 'video' ? (
-              <VideoPlayer src={memory.mediaUrl} poster={memory.mediaThumbnailUrl || undefined} />
-            ) : (
-              <img src={memory.mediaUrl} alt={memory.title} className="max-h-[52vh] w-full object-contain" />
-            )}
-          </div>
-        )}
+        {(() => {
+          const isCollage = (memory.type === 'foto' || memory.type === 'video') && memory.collageData
+          if (isCollage) {
+            const assets = memory.collageData.assets || []
+            if (assets.length === 0) return null
+            const currentAsset = assets[carouselIndex]
+
+            return (
+              <div className="relative mt-6 overflow-hidden rounded-2xl border border-purple-200/10 bg-black/25 select-none">
+                <div
+                  onTouchStart={handleTouchStart}
+                  onTouchEnd={handleTouchEnd}
+                  className="w-full flex items-center justify-center min-h-[200px]"
+                >
+                  <AnimatePresence mode="wait">
+                    <motion.div
+                      key={carouselIndex}
+                      initial={{ opacity: 0, x: 20 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      exit={{ opacity: 0, x: -20 }}
+                      transition={{ duration: 0.22 }}
+                      className="w-full flex items-center justify-center"
+                    >
+                      {currentAsset.resourceType === 'video' ? (
+                        <VideoPlayer src={currentAsset.url} poster={currentAsset.thumbnailUrl || undefined} />
+                      ) : (
+                        <img src={currentAsset.url} alt={`${memory.title} slide ${carouselIndex + 1}`} className="max-h-[52vh] w-full object-contain" />
+                      )}
+                    </motion.div>
+                  </AnimatePresence>
+                </div>
+
+                {/* Navigation Arrows */}
+                {assets.length > 1 && (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => setCarouselIndex((prev) => Math.max(prev - 1, 0))}
+                      disabled={carouselIndex === 0}
+                      className="absolute left-3 top-1/2 -translate-y-1/2 flex h-9 w-9 items-center justify-center rounded-full bg-black/50 text-white/70 backdrop-blur-sm transition hover:bg-black/75 hover:text-white disabled:opacity-0 disabled:pointer-events-none"
+                    >
+                      <ChevronLeft size={20} />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setCarouselIndex((prev) => Math.min(prev + 1, assets.length - 1))}
+                      disabled={carouselIndex === assets.length - 1}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 flex h-9 w-9 items-center justify-center rounded-full bg-black/50 text-white/70 backdrop-blur-sm transition hover:bg-black/75 hover:text-white disabled:opacity-0 disabled:pointer-events-none"
+                    >
+                      <ChevronRight size={20} />
+                    </button>
+                  </>
+                )}
+
+                {/* Dot Indicators */}
+                {assets.length > 1 && (
+                  <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex gap-1.5 z-10 bg-black/45 px-3 py-1.5 rounded-full backdrop-blur-md">
+                    {assets.map((_, i) => (
+                      <button
+                        key={i}
+                        type="button"
+                        onClick={() => setCarouselIndex(i)}
+                        className={`h-1.5 rounded-full transition-all duration-300 ${
+                          i === carouselIndex ? 'w-3.5 bg-white' : 'w-1.5 bg-white/40'
+                        }`}
+                      />
+                    ))}
+                  </div>
+                )}
+              </div>
+            )
+          }
+
+          if (memory.mediaUrl) {
+            return (
+              <div className="mt-6 overflow-hidden rounded-2xl border border-purple-200/10 bg-black/25">
+                {memory.mediaResourceType === 'video' || memory.type === 'video' ? (
+                  <VideoPlayer src={memory.mediaUrl} poster={memory.mediaThumbnailUrl || undefined} />
+                ) : (
+                  <img src={memory.mediaUrl} alt={memory.title} className="max-h-[52vh] w-full object-contain" />
+                )}
+              </div>
+            )
+          }
+
+          return null
+        })()}
 
         {(() => {
           const isQuoteJson = memory.type === 'quote' && memory.quoteData
@@ -1042,11 +1147,14 @@ function MemoryOverlay({ memory, candleLit, onToggleCandle, onClose, onPrevious,
             )
           }
 
+          const isCollage = (memory.type === 'foto' || memory.type === 'video') && memory.collageData
+          const bodyText = isCollage ? memory.collageData.caption : memory.body
+
           return (
-            memory.body && (
+            bodyText && (
               <div className="my-7 rounded-2xl border border-purple-200/10 bg-white/[0.03] p-6">
                 <p className="text-sm leading-7 whitespace-pre-wrap" style={{ color: 'var(--text-primary)' }}>
-                  {memory.body}
+                  {bodyText}
                 </p>
               </div>
             )

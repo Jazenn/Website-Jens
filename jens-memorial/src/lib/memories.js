@@ -17,6 +17,20 @@ export function mapMemoryRecord(record, index = 0, total = 1) {
     }
   }
 
+  let collageData = null
+  if ((record.type === 'foto' || record.type === 'video') && record.body) {
+    try {
+      if (record.body.trim().startsWith('{')) {
+        const parsed = JSON.parse(record.body)
+        if (parsed.isCollage) {
+          collageData = parsed
+        }
+      }
+    } catch (e) {
+      // Ignore
+    }
+  }
+
   return {
     id: record.id,
     type: record.type,
@@ -39,6 +53,7 @@ export function mapMemoryRecord(record, index = 0, total = 1) {
     positionIndex: index,
     positionTotal: total,
     quoteData,
+    collageData,
   }
 }
 

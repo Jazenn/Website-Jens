@@ -1,14 +1,13 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { ArrowLeft, FileText, Image, Quote, Send, Upload, Video, X } from 'lucide-react'
+import { ArrowLeft, FileText, Image, Quote, Send, Upload, Video, X, ChevronLeft, ChevronRight } from 'lucide-react'
 import { motion } from 'framer-motion'
 import { useAuth } from '../context/AuthContext'
 import { MEDIA_LIMITS, uploadMediaToCloudinary, validateMediaFile } from '../lib/cloudinary'
 import { createMemory } from '../lib/memories'
 
 const MEMORY_TYPES = [
-  { id: 'foto', label: 'Foto', description: 'Een beeld van een moment, plek of herinnering.', icon: Image, color: '#ffffff', accept: 'image/*' },
-  { id: 'video', label: 'Video', description: 'Een kort fragment dat iets van Jens laat zien.', icon: Video, color: '#997fff', accept: 'video/*' },
+  { id: 'foto', label: 'Foto / Video', description: 'Voeg één of meerdere foto\'s en video\'s toe (collage).', icon: Image, color: '#ffffff', accept: 'image/*,video/*' },
   { id: 'quote', label: 'Quote', description: 'Iets wat hij zei, of iets dat bij hem past.', icon: Quote, color: '#95ff9a' },
   { id: 'tekst', label: 'Tekstje', description: 'Een verhaal, gedachte of persoonlijk bericht.', icon: FileText, color: '#7dd3fc' },
 ]
@@ -43,7 +42,7 @@ export default function AddMemoryPage() {
   const [title, setTitle] = useState('')
   const [author, setAuthor] = useState('')
   const [body, setBody] = useState('')
-  const [file, setFile] = useState(null)
+  const [files, setFiles] = useState([])
   const [submitted, setSubmitted] = useState(false)
   const [error, setError] = useState('')
   const [uploading, setUploading] = useState(false)
@@ -55,15 +54,19 @@ export default function AddMemoryPage() {
   const [quoteContext, setQuoteContext] = useState('')
 
   const selectedType = useMemo(() => MEMORY_TYPES.find((memoryType) => memoryType.id === type), [type])
-  const previewUrl = useMemo(() => (file ? URL.createObjectURL(file) : null), [file])
-  const needsFile = type === 'foto' || type === 'video'
+  
+  const previewUrls = useMemo(() => {
+    return files.map((f) => ({ file: f, url: URL.createObjectURL(f) }))
+  }, [files])
+
+  const needsFile = type === 'foto'
   const bodyLimit = type === 'tekst' ? MEMORY_FIELD_LIMITS.text : type === 'quote' ? MEMORY_FIELD_LIMITS.quote : MEMORY_FIELD_LIMITS.body
 
   useEffect(() => {
     return () => {
-      if (previewUrl) URL.revokeObjectURL(previewUrl)
+      previewUrls.forEach((p) => URL.revokeObjectURL(p.url))
     }
-  }, [previewUrl])
+  }, [previewUrls])
 
   const handleBodyChange = (value) => {
     if (type === 'quote') {
@@ -75,6 +78,54 @@ export default function AddMemoryPage() {
     setBody(value)
   }
 
+  const ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif']
+  const ALLOWED_VIDEO_TYPES = ['video/mp4', 'video/quicktime', 'video/webm']
+
+  const handleFilesChange = (event) => {
+    const selectedList = event.target.files ? Array.from(event.target.files) : []
+    setError('')
+
+    if (files.length + selectedList.length > 8) {
+      setError('Je kunt maximaal 8 bestanden toevoegen aan een collage.')
+      return
+    }
+
+    const newFiles = []
+    for (let f of selectedList) {
+      const isImg = ALLOWED_IMAGE_TYPES.includes(f.type)
+      const isVid = ALLOWED_VIDEO_TYPES.includes(f.type)
+      if (!isImg && !isVid) {
+        setError(`Bestand "${f.name}" is geen ondersteunde foto of video.`)
+        return
+      }
+      if (isImg && f.size > MEDIA_LIMITS.imageMaxBytes) {
+        setError(`Foto "${f.name}" is te groot (max ${MEDIA_LIMITS.imageMaxBytes / 1024 / 1024}MB).`)
+        return
+      }
+      if (isVid && f.size > MEDIA_LIMITS.videoMaxBytes) {
+        setError(`Video "${f.name}" is te groot (max ${MEDIA_LIMITS.videoMaxBytes / 1024 / 1024}MB).`)
+        return
+      }
+      newFiles.push(f)
+    }
+
+    setFiles((prev) => [...prev, ...newFiles])
+  }
+
+  const removeFile = (index) => {
+    setFiles((prev) => prev.filter((_, i) => i !== index))
+  }
+
+  const moveFile = (index, direction) => {
+    const nextIndex = index + direction
+    if (nextIndex < 0 || nextIndex >= files.length) return
+    const newFiles = [...files]
+    const temp = newFiles[index]
+    newFiles[index] = newFiles[nextIndex]
+    newFiles[nextIndex] = temp
+    setFiles(newFiles)
+  }
+
   async function handleSubmit(event) {
     event.preventDefault()
     setError('')
@@ -83,29 +134,34 @@ export default function AddMemoryPage() {
       setError('Vul de quote in.')
       return
     }
-    if (needsFile && !file) {
-      setError('Kies eerst een bestand voor deze herinnering.')
+    if (needsFile && files.length === 0) {
+      setError('Kies eerst minstens één bestand voor deze herinnering.')
       return
-    }
-
-    let media = null
-
-    if (needsFile) {
-      const validation = validateMediaFile(file, type)
-      if (!validation.valid) {
-        setError(validation.message)
-        return
-      }
     }
 
     try {
       setUploading(true)
 
+      let assets = []
+      let media = null
+
       if (needsFile) {
-        media = await uploadMediaToCloudinary(file, type)
+        for (let i = 0; i < files.length; i++) {
+          const f = files[i]
+          const fileType = ALLOWED_IMAGE_TYPES.includes(f.type) ? 'foto' : 'video'
+          const result = await uploadMediaToCloudinary(f, fileType)
+          assets.push({
+            url: result.url,
+            thumbnailUrl: result.thumbnailUrl,
+            resourceType: result.resourceType,
+            bytes: result.bytes,
+            originalFilename: result.originalFilename,
+          })
+        }
+        media = assets[0]
       }
 
-      const fallbackTitle = type === 'foto' ? 'Herinnerings foto' : type === 'video' ? 'Herinnerings video' : type === 'quote' ? 'Herinnerings quote' : 'Herinnering'
+      const fallbackTitle = type === 'foto' ? (files.length > 1 ? 'Herinnerings collage' : 'Herinnerings foto') : type === 'quote' ? 'Herinnerings quote' : 'Herinnering'
       
       let finalizedBody = body.trim()
       if (type === 'quote') {
@@ -116,6 +172,12 @@ export default function AddMemoryPage() {
           year: quoteYear.trim(),
           context: quoteContext.trim(),
         })
+      } else if (type === 'foto' && files.length > 1) {
+        finalizedBody = JSON.stringify({
+          isCollage: true,
+          caption: body.trim(),
+          assets,
+        })
       }
 
       const memory = {
@@ -125,8 +187,8 @@ export default function AddMemoryPage() {
         author: author.trim(),
         body: finalizedBody,
         date: new Date().toLocaleDateString('nl-NL', { day: '2-digit', month: '2-digit', year: 'numeric' }),
-        fileName: file?.name ?? '',
-        mediaProvider: media?.provider ?? null,
+        fileName: media?.originalFilename ?? '',
+        mediaProvider: media?.provider ?? (media ? 'cloudinary' : null),
         mediaUrl: media?.url ?? null,
         mediaPublicId: media?.publicId ?? null,
         mediaResourceType: media?.resourceType ?? null,
@@ -157,29 +219,13 @@ export default function AddMemoryPage() {
 
   function handleTypeChange(nextType) {
     setType(nextType)
-    setFile(null)
+    setFiles([])
     setError('')
     setSubmitted(false)
     setQuoteBy('')
     setQuoteMonth('')
     setQuoteYear('')
     setQuoteContext('')
-  }
-
-  function handleFileChange(event) {
-    const selectedFile = event.target.files?.[0] ?? null
-    setError('')
-
-    if (selectedFile) {
-      const validation = validateMediaFile(selectedFile, type)
-      if (!validation.valid) {
-        setFile(null)
-        setError(validation.message)
-        return
-      }
-    }
-
-    setFile(selectedFile)
   }
 
   const SelectedIcon = selectedType.icon
@@ -301,39 +347,104 @@ export default function AddMemoryPage() {
 
             {needsFile && (
               <div className="mt-4">
-                <span className="mb-2 block text-xs uppercase tracking-[0.22em] text-white/45">Bestand</span>
-                <label className="flex min-h-52 cursor-pointer flex-col items-center justify-center rounded-3xl border border-dashed border-white/15 bg-white/[0.04] p-5 text-center transition hover:border-white/35">
-                  {previewUrl ? (
-                    <div className="relative w-full overflow-hidden rounded-2xl">
-                      <button
-                        type="button"
-                        onClick={(event) => {
-                          event.preventDefault()
-                          setFile(null)
-                        }}
-                        className="absolute right-3 top-3 z-10 rounded-full bg-black/60 p-2 text-white/80 backdrop-blur-md"
-                      >
-                        <X size={16} />
-                      </button>
-                      {type === 'foto' ? (
-                        <img src={previewUrl} alt="Voorbeeld" className="max-h-64 w-full object-cover" />
-                      ) : (
-                        <video src={previewUrl} className="max-h-64 w-full object-cover" controls />
-                      )}
-                    </div>
-                  ) : (
-                    <>
-                      <Upload className="mb-4 text-white/45" size={30} />
-                      <span className="text-sm text-white/70">Kies een bestand voor deze herinnering</span>
-                      <span className="mt-2 text-xs text-white/35">
-                        {type === 'foto'
-                          ? `JPG, PNG, WebP or GIF · max ${MEDIA_LIMITS.imageMaxBytes / 1024 / 1024}MB`
-                          : `MP4, MOV of WebM · max ${MEDIA_LIMITS.videoMaxBytes / 1024 / 1024}MB`}
-                      </span>
-                    </>
-                  )}
-                  <input type="file" accept={selectedType.accept} onChange={handleFileChange} className="hidden" />
-                </label>
+                <span className="mb-2 block text-xs uppercase tracking-[0.22em] text-white/45">Bestanden ({files.length}/8)</span>
+                {files.length > 0 ? (
+                  <div className="grid gap-3 grid-cols-2 sm:grid-cols-3 md:grid-cols-4 mb-4">
+                    {previewUrls.map((p, index) => {
+                      const isVid = ALLOWED_VIDEO_TYPES.includes(p.file.type)
+                      return (
+                        <div key={p.url} className="relative aspect-square rounded-2xl border border-white/10 bg-black/35 overflow-hidden group select-none">
+                          {/* Preview media */}
+                          {isVid ? (
+                            <video src={p.url} className="h-full w-full object-cover pointer-events-none" muted />
+                          ) : (
+                            <img src={p.url} alt={`Preview ${index + 1}`} className="h-full w-full object-cover" />
+                          )}
+                          
+                          {/* Index badge */}
+                          <span className="absolute left-2 top-2 z-10 flex h-6 w-6 items-center justify-center rounded-full bg-black/60 text-xs font-semibold text-white/95 backdrop-blur-md">
+                            {index + 1}
+                          </span>
+
+                          {/* Delete button */}
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.preventDefault()
+                              e.stopPropagation()
+                              removeFile(index)
+                            }}
+                            className="absolute right-2 top-2 z-10 rounded-full bg-black/60 p-1.5 text-white/80 hover:text-white backdrop-blur-md hover:bg-black/80 transition"
+                          >
+                            <X size={14} />
+                          </button>
+
+                          {/* Reordering buttons always visible at bottom */}
+                          <div className="absolute inset-x-0 bottom-0 bg-black/60 p-2 flex justify-between items-center">
+                            <button
+                              type="button"
+                              disabled={index === 0}
+                              onClick={(e) => {
+                                e.preventDefault()
+                                e.stopPropagation()
+                                moveFile(index, -1)
+                              }}
+                              className="rounded-lg bg-white/15 p-1 text-white hover:bg-white/25 disabled:opacity-30 disabled:pointer-events-none transition"
+                            >
+                              <ChevronLeft size={14} />
+                            </button>
+                            <span className="text-[10px] text-white/60 tracking-wider font-light">Volgorde</span>
+                            <button
+                              type="button"
+                              disabled={index === files.length - 1}
+                              onClick={(e) => {
+                                e.preventDefault()
+                                e.stopPropagation()
+                                moveFile(index, 1)
+                              }}
+                              className="rounded-lg bg-white/15 p-1 text-white hover:bg-white/25 disabled:opacity-30 disabled:pointer-events-none transition"
+                            >
+                              <ChevronRight size={14} />
+                            </button>
+                          </div>
+                        </div>
+                      )
+                    })}
+                    
+                    {/* Add more button */}
+                    {files.length < 8 && (
+                      <label className="relative flex aspect-square cursor-pointer flex-col items-center justify-center rounded-2xl border border-dashed border-white/20 bg-white/[0.02] hover:bg-white/[0.06] hover:border-white/40 transition">
+                        <Upload className="text-white/45 mb-1" size={20} />
+                        <span className="text-[10px] uppercase tracking-wider text-white/45">Voeg toe</span>
+                        <input
+                          type="file"
+                          accept={selectedType.accept}
+                          onChange={handleFilesChange}
+                          className="hidden"
+                          multiple
+                        />
+                      </label>
+                    )}
+                  </div>
+                ) : (
+                  <label className="flex min-h-52 cursor-pointer flex-col items-center justify-center rounded-3xl border border-dashed border-white/15 bg-white/[0.04] p-5 text-center transition hover:border-white/35">
+                    <Upload className="mb-4 text-white/45" size={30} />
+                    <span className="text-sm text-white/70">Kies bestanden voor deze herinnering</span>
+                    <span className="mt-2 text-xs text-white/35">
+                      Kies maximaal 8 foto's of video's
+                    </span>
+                    <span className="mt-1 text-[10px] text-white/25">
+                      Foto's tot 8MB · Video's tot 100MB
+                    </span>
+                    <input
+                      type="file"
+                      accept={selectedType.accept}
+                      onChange={handleFilesChange}
+                      className="hidden"
+                      multiple
+                    />
+                  </label>
+                )}
               </div>
             )}
 
