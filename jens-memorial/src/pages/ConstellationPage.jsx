@@ -488,10 +488,7 @@ export default function ConstellationPage() {
         const camera = graph.camera()
         const nodes = graph.graphData().nodes
         let closestNode = null
-        let minZ = Infinity
-        let targetX = 0
-        let targetY = 0
-
+        let minDistance = Infinity
         const tempV = new THREE.Vector3()
 
         nodes.forEach((node) => {
@@ -724,14 +721,13 @@ export default function ConstellationPage() {
       {/* Mobile viewport-centered node tooltip */}
       <div
         id="mobile-node-focus-pill"
-        className="pointer-events-none absolute z-20 flex items-center gap-2 rounded-full border border-white/10 bg-[#090616]/90 px-3 py-1.5 text-center text-xs text-white/95 shadow-2xl backdrop-blur-md transition-opacity duration-200 opacity-0 md:hidden whitespace-nowrap"
+        className="pointer-events-none absolute left-1/2 z-20 -translate-x-1/2 flex items-center gap-2 rounded-full border border-white/10 bg-black/55 px-4 py-2 text-center text-xs text-white/95 shadow-2xl backdrop-blur-md transition-opacity duration-300 opacity-0 md:hidden"
+        style={{ top: '6.5rem' }}
       >
-        <span id="mobile-node-focus-dot" className="h-1.5 w-1.5 rounded-full transition-colors duration-300"></span>
-        <span id="mobile-node-focus-title" className="font-light max-w-[120px] truncate text-[11px]"></span>
-        <span id="mobile-node-focus-type" className="opacity-45 uppercase tracking-wider text-[8px] font-semibold"></span>
+        <span id="mobile-node-focus-dot" className="h-2 w-2 rounded-full transition-colors duration-300"></span>
+        <span id="mobile-node-focus-title" className="font-medium max-w-[150px] truncate"></span>
+        <span id="mobile-node-focus-type" className="opacity-45 uppercase tracking-wider text-[9px] font-semibold"></span>
       </div>
-
-
 
       <button
         type="button"
