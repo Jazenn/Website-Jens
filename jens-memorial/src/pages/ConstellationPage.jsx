@@ -411,6 +411,17 @@ export default function ConstellationPage() {
     graph.controls().minDistance = window.innerWidth < 768 ? 180 : 100
     graph.controls().maxDistance = window.innerWidth < 768 ? 1050 : 910
     graph.controls().enablePan = false
+
+    const ctrl = graph.controls()
+
+    // Completely opt out of OrbitControls' 2-finger handling.
+    // Setting touches.TWO to -1 makes it fall through to `default: state = NONE`
+    // in the OrbitControls source — no dolly, no pan, no rotate from 2 fingers.
+    ctrl.touches = { ONE: THREE.TOUCH.ROTATE, TWO: -1 }
+
+    // Desktop: remap right-click from pan to zoom
+    ctrl.mouseButtons.RIGHT = THREE.MOUSE.DOLLY
+
     graph.resumeAnimation()
     graphInstanceRef.current = graph
 
@@ -441,7 +452,12 @@ export default function ConstellationPage() {
         }
       })
 
-      graph.controls().update()
+      // Lock the camera target to (0,0,0) every frame to guarantee panning can never occur.
+      const controls = graph.controls()
+      if (controls) {
+        controls.target.set(0, 0, 0)
+        controls.update()
+      }
 
       animationFrameRef.current = requestAnimationFrame(animateScene)
     }
@@ -455,11 +471,68 @@ export default function ConstellationPage() {
       graph.height(window.innerHeight)
     }
 
+    // ── Manual pinch-to-zoom ──────────────────────────────────────────────
+    // Since we disabled OrbitControls' 2-finger handling entirely, we handle
+    // pinch zoom ourselves by calling OrbitControls' internal _dollyIn/_dollyOut
+    // methods directly. To prevent accidental camera rotation from touch jitter,
+    // we disable rotate when 2+ fingers are down, and reset it when touches are 0.
+    const canvasEl = graphRef.current?.querySelector('canvas')
+    let lastPinchDist = null
+
+    const onPinchStart = (e) => {
+      if (e.touches.length >= 2) {
+        ctrl.enableRotate = false
+        const dx = e.touches[0].clientX - e.touches[1].clientX
+        const dy = e.touches[0].clientY - e.touches[1].clientY
+        lastPinchDist = Math.sqrt(dx * dx + dy * dy)
+        e.preventDefault()
+      }
+    }
+
+    const onPinchMove = (e) => {
+      if (e.touches.length >= 2 && lastPinchDist !== null) {
+        ctrl.enableRotate = false
+        const dx = e.touches[0].clientX - e.touches[1].clientX
+        const dy = e.touches[0].clientY - e.touches[1].clientY
+        const dist = Math.sqrt(dx * dx + dy * dy)
+        const ratio = dist / lastPinchDist
+        if (ratio > 1) {
+          ctrl._dollyIn(ratio)
+        } else {
+          ctrl._dollyOut(1 / ratio)
+        }
+        lastPinchDist = dist
+        e.preventDefault()
+      }
+    }
+
+    const onPinchEnd = (e) => {
+      if (e.touches.length === 0) {
+        ctrl.enableRotate = true
+      }
+      if (e.touches.length < 2) {
+        lastPinchDist = null
+      }
+    }
+
+    if (canvasEl) {
+      canvasEl.addEventListener('touchstart', onPinchStart, { passive: false })
+      canvasEl.addEventListener('touchmove', onPinchMove, { passive: false })
+      canvasEl.addEventListener('touchend', onPinchEnd)
+      canvasEl.addEventListener('touchcancel', onPinchEnd)
+    }
+
     handleResize()
     window.addEventListener('resize', handleResize)
 
     return () => {
       window.removeEventListener('resize', handleResize)
+      if (canvasEl) {
+        canvasEl.removeEventListener('touchstart', onPinchStart)
+        canvasEl.removeEventListener('touchmove', onPinchMove)
+        canvasEl.removeEventListener('touchend', onPinchEnd)
+        canvasEl.removeEventListener('touchcancel', onPinchEnd)
+      }
       if (animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current)
       graph.scene().remove(universe)
       universe.children.forEach((child) => {
