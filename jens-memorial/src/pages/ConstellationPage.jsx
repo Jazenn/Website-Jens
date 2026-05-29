@@ -985,6 +985,55 @@ function MemoryOverlay({ memory, candleLit, onToggleCandle, onClose, onPrevious,
 
   useEffect(() => {
     setCarouselIndex(0)
+
+    const assets = memory.collageData?.assets || []
+    if (assets.length <= 1) return
+
+    let active = true
+
+    async function preloadSequentially() {
+      for (let i = 0; i < assets.length; i++) {
+        if (!active) break
+        const asset = assets[i]
+
+        try {
+          await new Promise((resolve) => {
+            if (asset.resourceType === 'video') {
+              const video = document.createElement('video')
+              video.src = asset.url
+              video.preload = 'auto'
+              video.muted = true
+              
+              // Resolve when metadata is loaded (starts buffering successfully)
+              video.onloadedmetadata = () => {
+                resolve()
+              }
+              video.onerror = () => {
+                resolve()
+              }
+              video.load()
+            } else {
+              const img = new Image()
+              img.onload = () => {
+                resolve()
+              }
+              img.onerror = () => {
+                resolve()
+              }
+              img.src = asset.url
+            }
+          })
+        } catch (e) {
+          // Ignore error and continue to the next asset
+        }
+      }
+    }
+
+    preloadSequentially()
+
+    return () => {
+      active = false
+    }
   }, [memory])
 
   return (
