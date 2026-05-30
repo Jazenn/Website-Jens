@@ -85,8 +85,8 @@ export default function AddMemoryPage() {
     const selectedList = event.target.files ? Array.from(event.target.files) : []
     setError('')
 
-    if (files.length + selectedList.length > 8) {
-      setError('Je kunt maximaal 8 bestanden toevoegen aan een collage.')
+    if (files.length + selectedList.length > 10) {
+      setError('Je kunt maximaal 10 bestanden toevoegen aan een collage.')
       return
     }
 
@@ -347,7 +347,7 @@ export default function AddMemoryPage() {
 
             {needsFile && (
               <div className="mt-4">
-                <span className="mb-2 block text-xs uppercase tracking-[0.22em] text-white/45">Bestanden ({files.length}/8)</span>
+                <span className="mb-2 block text-xs uppercase tracking-[0.22em] text-white/45">Bestanden ({files.length}/10)</span>
                 {files.length > 0 ? (
                   <div className="grid gap-3 grid-cols-2 sm:grid-cols-3 md:grid-cols-4 mb-4">
                     {previewUrls.map((p, index) => {
@@ -412,7 +412,7 @@ export default function AddMemoryPage() {
                     })}
                     
                     {/* Add more button */}
-                    {files.length < 8 && (
+                    {files.length < 10 && (
                       <label className="relative flex aspect-square cursor-pointer flex-col items-center justify-center rounded-2xl border border-dashed border-white/20 bg-white/[0.02] hover:bg-white/[0.06] hover:border-white/40 transition">
                         <Upload className="text-white/45 mb-1" size={20} />
                         <span className="text-[10px] uppercase tracking-wider text-white/45">Voeg toe</span>
@@ -431,7 +431,7 @@ export default function AddMemoryPage() {
                     <Upload className="mb-4 text-white/45" size={30} />
                     <span className="text-sm text-white/70">Kies bestanden voor deze herinnering</span>
                     <span className="mt-2 text-xs text-white/35">
-                      Kies maximaal 8 foto's of video's
+                      Kies maximaal 10 foto's of video's
                     </span>
                     <span className="mt-1 text-[10px] text-white/25">
                       Foto's tot 8MB · Video's tot 100MB
