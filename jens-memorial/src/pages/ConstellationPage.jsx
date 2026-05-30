@@ -1240,7 +1240,7 @@ function MemoryOverlay({ memory, candleLit, onToggleCandle, onClose, onPrevious,
                       type="button"
                       onClick={() => setCarouselIndex((prev) => Math.max(prev - 1, 0))}
                       disabled={carouselIndex === 0}
-                      className="absolute left-3 top-1/2 -translate-y-1/2 flex h-9 w-9 items-center justify-center rounded-full bg-black/50 text-white/70 backdrop-blur-sm transition hover:bg-black/75 hover:text-white disabled:opacity-0 disabled:pointer-events-none"
+                      className="absolute left-3 top-1/2 -translate-y-1/2 hidden sm:flex h-9 w-9 items-center justify-center rounded-full bg-black/50 text-white/70 backdrop-blur-sm transition hover:bg-black/75 hover:text-white disabled:opacity-0 disabled:pointer-events-none"
                     >
                       <ChevronLeft size={20} />
                     </button>
@@ -1248,7 +1248,7 @@ function MemoryOverlay({ memory, candleLit, onToggleCandle, onClose, onPrevious,
                       type="button"
                       onClick={() => setCarouselIndex((prev) => Math.min(prev + 1, assets.length - 1))}
                       disabled={carouselIndex === assets.length - 1}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 flex h-9 w-9 items-center justify-center rounded-full bg-black/50 text-white/70 backdrop-blur-sm transition hover:bg-black/75 hover:text-white disabled:opacity-0 disabled:pointer-events-none"
+                      className="absolute right-3 top-1/2 -translate-y-1/2 hidden sm:flex h-9 w-9 items-center justify-center rounded-full bg-black/50 text-white/70 backdrop-blur-sm transition hover:bg-black/75 hover:text-white disabled:opacity-0 disabled:pointer-events-none"
                     >
                       <ChevronRight size={20} />
                     </button>
