@@ -933,14 +933,7 @@ function FeedbackPanel({ feedback, busyId, onToggleResolved, onDelete }) {
 }
 
 function FeedbackCard({ item, busy, onToggleResolved, onDelete }) {
-  const typeLabels = {
-    compliment: { label: 'Compliment ❤️', color: 'border-emerald-500/20 bg-emerald-500/10 text-emerald-300' },
-    problem: { label: 'Vraag / Probleem ❓', color: 'border-sky-500/20 bg-sky-500/10 text-sky-300' },
-    error: { label: 'Foutmelding / Bug 🐛', color: 'border-rose-500/20 bg-rose-500/10 text-rose-300' },
-    other: { label: 'Overig 📝', color: 'border-white/10 bg-white/5 text-white/60' },
-  }
-
-  const { label: typeLabel, color: typeColor } = typeLabels[item.type] ?? typeLabels.other
+  const isAnon = item.isAnonymous === true
 
   return (
     <article className="flex flex-col gap-4 rounded-3xl border border-white/10 bg-white/[0.04] p-5 sm:flex-row sm:items-start sm:justify-between">
@@ -948,9 +941,6 @@ function FeedbackCard({ item, busy, onToggleResolved, onDelete }) {
         <div className="mb-3 flex flex-wrap items-center gap-2">
           <span className="rounded-full border border-white/10 px-3 py-1 text-[0.65rem] uppercase tracking-[0.18em] text-white/45">
             {formatDate(item.createdAt)}
-          </span>
-          <span className={`rounded-full border px-3 py-1 text-[0.65rem] uppercase tracking-[0.18em] ${typeColor}`}>
-            {typeLabel}
           </span>
           {item.resolved ? (
             <span className="rounded-full border border-white/20 bg-white/5 px-3 py-1 text-[0.65rem] uppercase tracking-[0.18em] text-white/35">
@@ -961,10 +951,15 @@ function FeedbackCard({ item, busy, onToggleResolved, onDelete }) {
               Nieuw
             </span>
           )}
+          {isAnon && (
+            <span className="rounded-full border border-amber-500/30 bg-amber-500/20 px-3 py-1 text-[0.65rem] uppercase tracking-[0.18em] text-amber-200">
+              Anoniem
+            </span>
+          )}
         </div>
 
-        <h3 className="text-lg font-light text-white">{item.userName}</h3>
-        <p className="text-xs text-white/45 break-all">{item.userEmail}</p>
+        <h3 className="text-lg font-light text-white">{isAnon ? 'Anoniem' : item.userName}</h3>
+        {!isAnon && <p className="text-xs text-white/45 break-all">{item.userEmail}</p>}
 
         <div className="mt-4 rounded-2xl bg-black/20 p-4 border border-white/5 text-sm leading-6 text-white/70 whitespace-pre-wrap">
           {item.message}

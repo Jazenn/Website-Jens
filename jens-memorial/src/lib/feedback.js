@@ -9,11 +9,12 @@ function mapFeedback(record) {
     type: record.type,
     message: record.message,
     resolved: record.resolved === true,
+    isAnonymous: record.is_anonymous === true,
     createdAt: record.created_at,
   }
 }
 
-export async function submitFeedback({ userId, userEmail, userName, type, message }) {
+export async function submitFeedback({ userId, userEmail, userName, type, message, isAnonymous }) {
   const { data, error } = await supabase
     .from('feedback')
     .insert({
@@ -22,6 +23,7 @@ export async function submitFeedback({ userId, userEmail, userName, type, messag
       user_name: userName,
       type,
       message,
+      is_anonymous: isAnonymous,
     })
     .select('*')
     .single()
@@ -61,13 +63,12 @@ export async function deleteFeedback(feedbackId) {
   if (error) throw error
 }
 
-export async function notifyFeedback({ email, name, type, message }) {
+export async function notifyFeedback({ email, name, type, message, isAnonymous }) {
   try {
     await supabase.functions.invoke('notify-feedback', {
-      body: { email, name, type, message },
+      body: { email, name, type, message, isAnonymous },
     })
   } catch (error) {
     console.error('notifyFeedback error:', error)
   }
 }
-

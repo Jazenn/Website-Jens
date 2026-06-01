@@ -271,12 +271,14 @@ create table if not exists public.feedback (
   user_id uuid references auth.users(id) on delete set null,
   user_email text not null,
   user_name text,
-  type text not null check (type in ('compliment', 'problem', 'error', 'other')),
+  type text not null default 'other',
   message text not null,
   resolved boolean not null default false,
+  is_anonymous boolean not null default false,
   created_at timestamptz not null default now()
 );
 
+alter table public.feedback add column if not exists is_anonymous boolean not null default false;
 alter table public.feedback enable row level security;
 
 -- Users can insert their own feedback

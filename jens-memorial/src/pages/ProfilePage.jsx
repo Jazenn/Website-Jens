@@ -7,8 +7,8 @@ import { submitFeedback, notifyFeedback } from '../lib/feedback'
 
 export default function ProfilePage() {
   const { user, userRecord, signOut } = useAuth()
-  const [type, setType] = useState('compliment')
   const [message, setMessage] = useState('')
+  const [isAnonymous, setIsAnonymous] = useState(false)
   const [sending, setSending] = useState(false)
   const [success, setSuccess] = useState(false)
   const [error, setError] = useState('')
@@ -25,6 +25,7 @@ export default function ProfilePage() {
       const email = userRecord?.email || user?.email || ''
       const name = userRecord?.name || user?.user_metadata?.full_name || user?.user_metadata?.name || email.split('@')[0]
       const userId = user?.id || null
+      const type = 'other'
 
       // Save to database
       await submitFeedback({
@@ -33,6 +34,7 @@ export default function ProfilePage() {
         userName: name,
         type,
         message: message.trim(),
+        isAnonymous,
       })
 
       // Send email notification via Edge Function
@@ -41,6 +43,7 @@ export default function ProfilePage() {
         name,
         type,
         message: message.trim(),
+        isAnonymous,
       })
 
       setSuccess(true)
@@ -109,18 +112,18 @@ export default function ProfilePage() {
               <MessageSquare size={20} />
             </div>
             <div>
-              <h2 className="text-xl font-light text-white tracking-wide">Bericht voor de beheerder</h2>
-              <p className="text-xs text-white/45">Foutmelding, compliment of een vraag</p>
+              <h2 className="text-xl font-light text-white tracking-wide">Berichtje voor Jason</h2>
+              <p className="text-xs text-white/45">Vraag, bug, of een complimentje</p>
             </div>
           </div>
 
           <p className="text-sm leading-6 text-white/55 mb-6">
-            Heb je een bug gevonden, een vraag over de website, of wil je simpelweg een compliment achterlaten? Stuur een bericht en ik neem het zo snel mogelijk door.
+            Hier kan je een berichtje achter laten voor Jason als je een vraag hebt over de site, een stukje content zoals een foto of filmpje, een probleem hebt of een bug hebt gevonden, of als je gewoon een complimentje wil geven ;) Alle feedback is gewaardeerd en zorgt ervoor dat ik de site voor iedereen mooi en toegankelijk kan maken! Groetjes Jason joejoe &lt;3
           </p>
 
           {success && (
             <div className="mb-6 rounded-2xl border border-emerald-500/25 bg-emerald-500/10 p-4 text-sm text-emerald-200">
-              Hartelijk dank! Je bericht is succesvol verzonden naar de beheerder.
+              Hartelijk dank! Je bericht is succesvol verzonden naar Jason.
             </div>
           )}
 
@@ -131,22 +134,6 @@ export default function ProfilePage() {
           )}
 
           <form onSubmit={handleSubmit} className="space-y-4">
-            <div>
-              <label className="mb-2 block text-xs uppercase tracking-[0.22em] text-white/35">
-                Type bericht
-              </label>
-              <select
-                value={type}
-                onChange={(e) => setType(e.target.value)}
-                className="w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white outline-none transition focus:border-purple-200/40 [&>option]:bg-[#18181b] [&>option]:text-white"
-              >
-                <option value="compliment">Compliment ❤️</option>
-                <option value="problem">Vraag of probleem ❓</option>
-                <option value="error">Foutmelding / Bug 🐛</option>
-                <option value="other">Overig 📝</option>
-              </select>
-            </div>
-
             <div>
               <label className="mb-2 flex items-center justify-between text-xs uppercase tracking-[0.22em] text-white/35">
                 <span>Jouw bericht</span>
@@ -160,6 +147,20 @@ export default function ProfilePage() {
                 className="w-full resize-none rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm leading-6 text-white outline-none transition focus:border-purple-200/40"
                 placeholder="Typ hier je bericht..."
               />
+            </div>
+
+            <div className="flex items-start gap-3 rounded-2xl border border-white/5 bg-white/[0.02] p-4">
+              <input
+                type="checkbox"
+                id="isAnonymous"
+                checked={isAnonymous}
+                onChange={(e) => setIsAnonymous(e.target.checked)}
+                className="mt-1 h-4 w-4 rounded border-white/20 bg-white/5 text-purple-600 focus:ring-purple-500 cursor-pointer"
+              />
+              <label htmlFor="isAnonymous" className="text-xs text-white/55 cursor-pointer select-none leading-5">
+                <span className="block font-medium text-white/80">Stuur anoniem</span>
+                Ik vind het natuurlijk super leuk om te weten wie dit stuurt, maar voel je vrij om het anoniem te verzenden!
+              </label>
             </div>
 
             <button
@@ -176,4 +177,3 @@ export default function ProfilePage() {
     </div>
   )
 }
-
