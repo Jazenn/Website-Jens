@@ -264,3 +264,52 @@ create policy "Admins can delete tracks"
 create index if not exists memories_created_at_idx on public.memories (created_at desc);
 create index if not exists memory_candles_memory_id_idx on public.memory_candles (memory_id);
 create index if not exists tracks_created_at_idx on public.tracks (created_at desc);
+
+-- Feedback table
+create table if not exists public.feedback (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid references auth.users(id) on delete set null,
+  user_email text not null,
+  user_name text,
+  type text not null check (type in ('compliment', 'problem', 'error', 'other')),
+  message text not null,
+  resolved boolean not null default false,
+  created_at timestamptz not null default now()
+);
+
+alter table public.feedback enable row level security;
+
+-- Users can insert their own feedback
+drop policy if exists "Authenticated users can submit feedback" on public.feedback;
+create policy "Authenticated users can submit feedback"
+  on public.feedback for insert
+  to authenticated
+  with check (
+    user_id = auth.uid()
+    and user_email = auth.jwt() ->> 'email'
+  );
+
+-- Admins can read all feedback
+drop policy if exists "Admins can view feedback" on public.feedback;
+create policy "Admins can view feedback"
+  on public.feedback for select
+  to authenticated
+  using (public.is_current_user_admin());
+
+-- Admins can update feedback (e.g. resolve it)
+drop policy if exists "Admins can update feedback" on public.feedback;
+create policy "Admins can update feedback"
+  on public.feedback for update
+  to authenticated
+  using (public.is_current_user_admin())
+  with check (public.is_current_user_admin());
+
+-- Admins can delete feedback
+drop policy if exists "Admins can delete feedback" on public.feedback;
+create policy "Admins can delete feedback"
+  on public.feedback for delete
+  to authenticated
+  using (public.is_current_user_admin());
+
+create index if not exists feedback_created_at_idx on public.feedback (created_at desc);
+

@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { ArrowLeft, Check, Edit3, ExternalLink, FileText, Flame, Image, LogOut, Music, Quote, RefreshCw, Save, Shield, Star, Trash2, UserCheck, Video, X } from 'lucide-react'
+import { ArrowLeft, Check, Edit3, ExternalLink, FileText, Flame, Image, LogOut, MessageSquare, Music, Quote, RefreshCw, Save, Shield, Star, Trash2, UserCheck, Video, X } from 'lucide-react'
 import { deleteMemory, fetchMemories, updateMemory, updateMemoryCoreStatus } from '../lib/memories'
 import { deleteTrack, fetchTracks, updateTrack } from '../lib/tracks'
 import { createWhitelistedUser, fetchUsers, updateUserAccess } from '../lib/users'
 import { useAuth } from '../context/AuthContext'
+import { fetchFeedback, updateFeedbackResolved, deleteFeedback } from '../lib/feedback'
 
 const TABS = [
   { id: 'foto', label: "Foto's", icon: Image },
@@ -13,6 +14,7 @@ const TABS = [
   { id: 'tekst', label: 'Teksten', icon: FileText },
   { id: 'music', label: 'Muziek', icon: Music },
   { id: 'requests', label: 'Aanvragen', icon: UserCheck },
+  { id: 'feedback', label: 'Berichten', icon: MessageSquare },
 ]
 
 const TYPE_ICONS = {
@@ -47,6 +49,7 @@ export default function AdminPage() {
   const [memories, setMemories] = useState([])
   const [tracks, setTracks] = useState([])
   const [users, setUsers] = useState([])
+  const [feedback, setFeedback] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [busyId, setBusyId] = useState(null)
@@ -69,10 +72,16 @@ export default function AdminPage() {
     try {
       setLoading(true)
       setError('')
-      const [loadedMemories, loadedTracks, loadedUsers] = await Promise.all([fetchMemories(), fetchTracks(), fetchUsers()])
+      const [loadedMemories, loadedTracks, loadedUsers, loadedFeedback] = await Promise.all([
+        fetchMemories(),
+        fetchTracks(),
+        fetchUsers(),
+        fetchFeedback(),
+      ])
       setMemories(loadedMemories)
       setTracks(loadedTracks)
       setUsers(loadedUsers)
+      setFeedback(loadedFeedback)
     } catch (loadError) {
       setError(loadError.message || 'Kon admin content niet laden.')
     } finally {
@@ -83,6 +92,33 @@ export default function AdminPage() {
   useEffect(() => {
     loadAdminContent()
   }, [])
+
+  async function handleToggleFeedbackResolved(item) {
+    try {
+      setBusyId(item.id)
+      const updated = await updateFeedbackResolved(item.id, !item.resolved)
+      setFeedback((current) => current.map((f) => (f.id === item.id ? updated : f)))
+    } catch (updateError) {
+      setError(updateError.message || 'Kon status niet aanpassen.')
+    } finally {
+      setBusyId(null)
+    }
+  }
+
+  async function handleDeleteFeedback(item) {
+    const confirmed = window.confirm('Weet je zeker dat je dit bericht wilt verwijderen?')
+    if (!confirmed) return
+
+    try {
+      setBusyId(item.id)
+      await deleteFeedback(item.id)
+      setFeedback((current) => current.filter((f) => f.id !== item.id))
+    } catch (deleteError) {
+      setError(deleteError.message || 'Bericht verwijderen is mislukt.')
+    } finally {
+      setBusyId(null)
+    }
+  }
 
   async function handleDeleteMemory(memory) {
     const confirmed = window.confirm(`Weet je zeker dat je "${memory.title}" wilt verwijderen?`)
@@ -184,7 +220,13 @@ export default function AdminPage() {
     }
   }
 
-  const activeItems = activeTab === 'music' ? sortedTracks : activeTab === 'requests' ? pendingUsers : groupedMemories[activeTab]
+  const activeItems = activeTab === 'music'
+    ? sortedTracks
+    : activeTab === 'requests'
+    ? pendingUsers
+    : activeTab === 'feedback'
+    ? feedback
+    : groupedMemories[activeTab]
 
   return (
     <div className="relative min-h-screen overflow-hidden px-5 py-6" style={{ background: 'var(--cosmic-bg)' }}>
@@ -231,7 +273,7 @@ export default function AdminPage() {
           <p className="mb-3 text-xs uppercase tracking-[0.35em] text-white/35">Alleen admin</p>
           <h1 className="text-4xl font-extralight tracking-[0.16em] text-white">Content beheer</h1>
           <p className="mt-4 max-w-2xl text-sm leading-7 text-white/55">
-            Bekijk en beheer alle foto's, video's, quotes, teksten en muziek. Alles staat gesorteerd op laatst toegevoegd.
+            Bekijk en beheer alle foto's, video's, quotes, teksten, muziek en berichten. Alles staat gesorteerd op laatst toegevoegd.
           </p>
         </section>
 
@@ -244,7 +286,13 @@ export default function AdminPage() {
         <div className="mb-5 flex flex-wrap gap-2">
           {TABS.map((tab) => {
             const Icon = tab.icon
-            const count = tab.id === 'music' ? sortedTracks.length : tab.id === 'requests' ? pendingUsers.length : groupedMemories[tab.id].length
+            const count = tab.id === 'music'
+              ? sortedTracks.length
+              : tab.id === 'requests'
+              ? pendingUsers.length
+              : tab.id === 'feedback'
+              ? feedback.filter((f) => !f.resolved).length
+              : groupedMemories[tab.id].length
             const active = activeTab === tab.id
 
             return (
@@ -278,6 +326,13 @@ export default function AdminPage() {
               onWhitelistFormChange={setWhitelistForm}
               onCreateWhitelistedUser={handleCreateWhitelistedUser}
               onUpdateUserAccess={handleUpdateUserAccess}
+            />
+          ) : activeTab === 'feedback' ? (
+            <FeedbackPanel
+              feedback={feedback}
+              busyId={busyId}
+              onToggleResolved={handleToggleFeedbackResolved}
+              onDelete={handleDeleteFeedback}
             />
           ) : activeItems.length === 0 ? (
             <div className="flex min-h-48 items-center justify-center text-center text-sm text-white/45">
@@ -808,6 +863,132 @@ function TrackAdminCard({ track, busy, onDelete, onUpdate }) {
           type="button"
           disabled={busy}
           onClick={() => onDelete(track)}
+          className="inline-flex items-center gap-2 rounded-full border border-rose-200/20 px-4 py-2 text-xs text-rose-100 transition hover:bg-rose-300/10 disabled:opacity-50"
+        >
+          <Trash2 size={14} />
+          Verwijder
+        </button>
+      </div>
+    </article>
+  )
+}
+
+function FeedbackPanel({ feedback, busyId, onToggleResolved, onDelete }) {
+  const unresolvedFeedback = feedback.filter((f) => !f.resolved)
+  const resolvedFeedback = feedback.filter((f) => f.resolved)
+
+  return (
+    <div className="grid gap-8">
+      <section>
+        <div className="mb-4 flex items-center justify-between gap-3">
+          <div>
+            <h2 className="text-xl font-light text-white">Nieuwe berichten ({unresolvedFeedback.length})</h2>
+            <p className="text-sm text-white/45">Ongelezen of openstaande feedback van gebruikers.</p>
+          </div>
+        </div>
+
+        {unresolvedFeedback.length === 0 ? (
+          <div className="rounded-3xl border border-white/10 bg-white/[0.04] p-5 text-sm text-white/45">
+            Geen nieuwe berichten.
+          </div>
+        ) : (
+          <div className="grid gap-4">
+            {unresolvedFeedback.map((item) => (
+              <FeedbackCard
+                key={item.id}
+                item={item}
+                busy={busyId === item.id}
+                onToggleResolved={onToggleResolved}
+                onDelete={onDelete}
+              />
+            ))}
+          </div>
+        )}
+      </section>
+
+      {resolvedFeedback.length > 0 && (
+        <section>
+          <div className="mb-4 flex items-center justify-between gap-3">
+            <div>
+              <h2 className="text-xl font-light text-white/70">Gelezen / Opgelost ({resolvedFeedback.length})</h2>
+              <p className="text-sm text-white/45">Berichten die zijn afgehandeld.</p>
+            </div>
+          </div>
+
+          <div className="grid gap-4">
+            {resolvedFeedback.map((item) => (
+              <FeedbackCard
+                key={item.id}
+                item={item}
+                busy={busyId === item.id}
+                onToggleResolved={onToggleResolved}
+                onDelete={onDelete}
+              />
+            ))}
+          </div>
+        </section>
+      )}
+    </div>
+  )
+}
+
+function FeedbackCard({ item, busy, onToggleResolved, onDelete }) {
+  const typeLabels = {
+    compliment: { label: 'Compliment ❤️', color: 'border-emerald-500/20 bg-emerald-500/10 text-emerald-300' },
+    problem: { label: 'Vraag / Probleem ❓', color: 'border-sky-500/20 bg-sky-500/10 text-sky-300' },
+    error: { label: 'Foutmelding / Bug 🐛', color: 'border-rose-500/20 bg-rose-500/10 text-rose-300' },
+    other: { label: 'Overig 📝', color: 'border-white/10 bg-white/5 text-white/60' },
+  }
+
+  const { label: typeLabel, color: typeColor } = typeLabels[item.type] ?? typeLabels.other
+
+  return (
+    <article className="flex flex-col gap-4 rounded-3xl border border-white/10 bg-white/[0.04] p-5 sm:flex-row sm:items-start sm:justify-between">
+      <div className="flex-1">
+        <div className="mb-3 flex flex-wrap items-center gap-2">
+          <span className="rounded-full border border-white/10 px-3 py-1 text-[0.65rem] uppercase tracking-[0.18em] text-white/45">
+            {formatDate(item.createdAt)}
+          </span>
+          <span className={`rounded-full border px-3 py-1 text-[0.65rem] uppercase tracking-[0.18em] ${typeColor}`}>
+            {typeLabel}
+          </span>
+          {item.resolved ? (
+            <span className="rounded-full border border-white/20 bg-white/5 px-3 py-1 text-[0.65rem] uppercase tracking-[0.18em] text-white/35">
+              Gelezen
+            </span>
+          ) : (
+            <span className="rounded-full border border-purple-500/30 bg-purple-500/20 px-3 py-1 text-[0.65rem] uppercase tracking-[0.18em] text-purple-200">
+              Nieuw
+            </span>
+          )}
+        </div>
+
+        <h3 className="text-lg font-light text-white">{item.userName}</h3>
+        <p className="text-xs text-white/45 break-all">{item.userEmail}</p>
+
+        <div className="mt-4 rounded-2xl bg-black/20 p-4 border border-white/5 text-sm leading-6 text-white/70 whitespace-pre-wrap">
+          {item.message}
+        </div>
+      </div>
+
+      <div className="flex flex-row gap-2 sm:flex-col sm:items-stretch sm:justify-start">
+        <button
+          type="button"
+          disabled={busy}
+          onClick={() => onToggleResolved(item)}
+          className={`inline-flex items-center gap-2 rounded-full border px-4 py-2 text-xs transition disabled:opacity-50 ${
+            item.resolved
+              ? 'border-white/10 text-white/60 hover:bg-white/10'
+              : 'border-emerald-200/20 text-emerald-100 hover:bg-emerald-300/10'
+          }`}
+        >
+          <Check size={14} />
+          {item.resolved ? 'Markeer als nieuw' : 'Gelezen'}
+        </button>
+        <button
+          type="button"
+          disabled={busy}
+          onClick={() => onDelete(item)}
           className="inline-flex items-center gap-2 rounded-full border border-rose-200/20 px-4 py-2 text-xs text-rose-100 transition hover:bg-rose-300/10 disabled:opacity-50"
         >
           <Trash2 size={14} />
