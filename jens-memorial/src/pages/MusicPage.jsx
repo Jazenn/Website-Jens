@@ -251,7 +251,7 @@ export default function MusicPage() {
                           </span>
                         </>
                       )}
-                      <input type="file" accept="audio/*" onChange={handleAudioFileChange} className="hidden" />
+                      <input type="file" accept="audio/*" onChange={handleAudioFileChange} className="sr-only" />
                     </label>
                   </div>
 

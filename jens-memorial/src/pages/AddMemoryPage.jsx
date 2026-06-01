@@ -420,7 +420,7 @@ export default function AddMemoryPage() {
                           type="file"
                           accept={selectedType.accept}
                           onChange={handleFilesChange}
-                          className="hidden"
+                          className="sr-only"
                           multiple
                         />
                       </label>
@@ -440,7 +440,7 @@ export default function AddMemoryPage() {
                       type="file"
                       accept={selectedType.accept}
                       onChange={handleFilesChange}
-                      className="hidden"
+                      className="sr-only"
                       multiple
                     />
                   </label>
