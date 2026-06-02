@@ -15,7 +15,7 @@ function mapFeedback(record) {
 }
 
 export async function submitFeedback({ userId, userEmail, userName, type, message, isAnonymous }) {
-  const { data, error } = await supabase
+  const { error } = await supabase
     .from('feedback')
     .insert({
       user_id: userId,
@@ -25,11 +25,8 @@ export async function submitFeedback({ userId, userEmail, userName, type, messag
       message,
       is_anonymous: isAnonymous,
     })
-    .select('*')
-    .single()
 
   if (error) throw error
-  return mapFeedback(data)
 }
 
 export async function fetchFeedback() {

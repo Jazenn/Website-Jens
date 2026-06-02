@@ -287,8 +287,8 @@ create policy "Authenticated users can submit feedback"
   on public.feedback for insert
   to authenticated
   with check (
-    user_id = auth.uid()
-    and user_email = auth.jwt() ->> 'email'
+    (user_id is null or user_id = auth.uid())
+    and lower(user_email) = lower(auth.jwt() ->> 'email')
   );
 
 -- Admins can read all feedback
