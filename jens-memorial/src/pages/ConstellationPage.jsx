@@ -890,7 +890,7 @@ export default function ConstellationPage() {
 
       <nav
         className={`fixed left-1/2 z-40 flex -translate-x-1/2 items-center gap-2 rounded-full border border-purple-300/15 bg-black/45 px-3 py-2 shadow-2xl backdrop-blur-md transition-opacity duration-700 ${showRevealOverlay || selectedMemory ? 'pointer-events-none opacity-0' : 'opacity-100'}`}
-        style={{ bottom: 'clamp(4.5rem, calc(env(safe-area-inset-bottom, 0px) + 8svh), 7rem)' }}
+        style={{ bottom: 'calc(1.25rem + env(safe-area-inset-bottom, 0px))' }}
       >
         <NavItem to="/add" label="Toevoegen" icon={<PenLine size={16} />} />
         <NavItem to="/music" label="Muziek" icon={<Music size={16} />} />
@@ -904,7 +904,7 @@ export default function ConstellationPage() {
       {currentTrack && (
         <div
           className={`absolute right-4 z-20 hidden w-[min(23rem,calc(100vw-2rem))] rounded-3xl border border-purple-200/15 bg-black/35 p-4 shadow-2xl backdrop-blur-md transition-opacity duration-700 sm:right-5 sm:block ${selectedMemory ? 'pointer-events-none opacity-0' : 'opacity-100'}`}
-          style={{ bottom: 'max(6rem, calc(env(safe-area-inset-bottom) + 5.75rem))' }}
+          style={{ bottom: 'max(6rem, calc(env(safe-area-inset-bottom, 0px) + 5.75rem))' }}
         >
           <div className="flex items-center gap-3">
             <button
@@ -953,7 +953,7 @@ export default function ConstellationPage() {
       {currentTrack && (
         <div
           className={`fixed right-0 z-30 overflow-hidden transition-all duration-500 ease-out sm:hidden ${showRevealOverlay || selectedMemory ? 'pointer-events-none opacity-0' : 'opacity-100'} ${mobilePlayerOpen ? 'w-[min(22rem,calc(100vw-1rem))]' : 'w-16'}`}
-          style={{ bottom: 'clamp(9rem, calc(env(safe-area-inset-bottom, 0px) + 17svh), 13rem)' }}
+          style={{ bottom: 'calc(5.25rem + env(safe-area-inset-bottom, 0px))' }}
         >
           <div className="h-16 overflow-hidden rounded-l-full border border-r-0 border-purple-200/15 bg-black/60 shadow-2xl backdrop-blur-xl">
             <button
@@ -1175,7 +1175,7 @@ function MemoryOverlay({ memory, candleLit, onToggleCandle, onClose, onPrevious,
       onMouseDown={onClose}
     >
       <motion.article
-        className="relative my-auto max-h-[calc(100svh-3rem)] w-full max-w-xl overflow-y-auto rounded-3xl border border-purple-200/15 bg-[#090616]/90 p-7 shadow-2xl"
+        className="relative my-auto max-h-[calc(100vh-3rem)] w-full max-w-xl overflow-y-auto rounded-3xl border border-purple-200/15 bg-[#090616]/90 p-7 shadow-2xl"
         initial={{ opacity: 0, scale: 0.96, y: 16 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}
         exit={{ opacity: 0, scale: 0.96, y: 16 }}
