@@ -416,7 +416,7 @@ export default function ConstellationPage() {
         return group
       })
 
-    const cameraDistance = window.innerWidth < 768 ? 1050 : 500
+    const cameraDistance = window.innerWidth < 768 ? 800 : 500
     graph.cameraPosition({ x: 0, y: 0, z: cameraDistance }, { x: 0, y: 0, z: 0 }, 1200)
     graph.cooldownTicks(1)
     graph.d3Force('charge', null)
