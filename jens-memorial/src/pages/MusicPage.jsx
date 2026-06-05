@@ -344,7 +344,7 @@ export default function MusicPage() {
                           <Music size={22} />
                         </div>
                         <div className="min-w-0 flex-1">
-                          <h3 className="truncate text-lg font-light text-white">{track.title}</h3>
+                          <h3 className="line-clamp-2 text-lg font-light text-white">{track.title}</h3>
                           <div className="mt-1 flex flex-wrap items-center gap-2 text-sm text-white/45">
                             <span>{track.artist || 'Onbekende artiest'}</span>
                             <span className="shrink-0 rounded-full border border-white/10 px-2 py-0.5 text-[0.65rem] uppercase tracking-[0.14em] text-white/35">
@@ -361,7 +361,7 @@ export default function MusicPage() {
                             {currentTrack?.id === track.id && isPlaying ? 'Pauze' : 'Speel'}
                           </button>
                         ) : (
-                          <span className="inline-flex items-center gap-2 rounded-full border border-white/10 px-4 py-2 text-xs text-white/35">Geen achtergrondplayback</span>
+                          <span className="inline-flex items-center gap-2 rounded-full border border-white/10 px-4 py-2 text-xs text-white/35">Geen playback</span>
                         )}
                         {track.externalUrl && (
                           <a href={track.externalUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 rounded-full border border-white/10 px-4 py-2 text-xs text-white/55 transition hover:bg-white/10 hover:text-white">
@@ -379,11 +379,6 @@ export default function MusicPage() {
                             {track.submittedByName && <p className="mb-2 text-xs uppercase tracking-[0.22em] text-white/35">Toegevoegd door {track.submittedByName}</p>}
                             {track.reason && <p className="text-sm leading-6 text-white/70">“{track.reason}”</p>}
                           </div>
-                        )}
-                        {!playable && (
-                          <p className="rounded-2xl border border-amber-200/15 bg-amber-200/10 px-4 py-3 text-sm leading-6 text-amber-50/80">
-                            Voor dit nummer is geen audiobestand ge?pload. Het kan daarom niet door blijven spelen buiten dit tabblad en wordt niet meegenomen in de random achtergrondplaylist.
-                          </p>
                         )}
                         {getYoutubeId(track.externalUrl ?? '') && (
                           <div className="mt-4 overflow-hidden rounded-2xl border border-white/10 bg-black/30">
