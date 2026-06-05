@@ -328,7 +328,18 @@ export default function MusicPage() {
                 return (
                   <article key={track.id} className={`rounded-3xl border p-4 transition ${expanded ? 'border-purple-200/35 bg-purple-200/[0.07]' : 'border-white/10 bg-white/[0.04]'}`}>
                     <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-                      <button type="button" onClick={() => setExpandedTrackId(expanded ? null : track.id)} className="flex w-full min-w-0 sm:flex-1 items-center gap-4 text-left">
+                      <div
+                        role="button"
+                        tabIndex={0}
+                        onClick={() => setExpandedTrackId(expanded ? null : track.id)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' || e.key === ' ') {
+                            e.preventDefault()
+                            setExpandedTrackId(expanded ? null : track.id)
+                          }
+                        }}
+                        className="flex w-full min-w-0 sm:flex-1 items-center gap-4 text-left cursor-pointer outline-none"
+                      >
                         <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl border border-white/10 bg-black/35 text-white/45">
                           <Music size={22} />
                         </div>
@@ -341,7 +352,7 @@ export default function MusicPage() {
                             </span>
                           </div>
                         </div>
-                      </button>
+                      </div>
 
                       <div className="flex flex-wrap gap-2 shrink-0">
                         {playable ? (
