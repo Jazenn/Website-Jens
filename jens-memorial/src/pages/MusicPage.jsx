@@ -326,8 +326,8 @@ export default function MusicPage() {
                 const expanded = expandedTrackId === track.id
                 const playable = track.sourceType === 'audio'
                 return (
-                  <article key={track.id} className={`rounded-3xl border p-4 transition ${expanded ? 'border-purple-200/35 bg-purple-200/[0.07]' : 'border-white/10 bg-white/[0.04]'}`}>
-                    <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                  <article key={track.id} className={`w-full min-w-0 rounded-3xl border p-4 transition ${expanded ? 'border-purple-200/35 bg-purple-200/[0.07]' : 'border-white/10 bg-white/[0.04]'}`}>
+                    <div className="flex w-full min-w-0 flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                       <div
                         role="button"
                         tabIndex={0}
