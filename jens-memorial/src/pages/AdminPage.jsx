@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { ArrowLeft, Check, Edit3, ExternalLink, FileText, Flame, Image, LogOut, MessageSquare, Music, Quote, RefreshCw, Save, Shield, Star, Trash2, UserCheck, Video, X } from 'lucide-react'
+import { ArrowLeft, Check, Edit3, ExternalLink, FileText, Flame, Image, LogOut, MessageSquare, Music, Quote, RefreshCw, Save, Shield, Star, Trash2, UserCheck, Video, X, AlertTriangle } from 'lucide-react'
 import { deleteMemory, fetchMemories, updateMemory, updateMemoryCoreStatus } from '../lib/memories'
 import { deleteTrack, fetchTracks, updateTrack } from '../lib/tracks'
 import { createWhitelistedUser, fetchUsers, updateUserAccess } from '../lib/users'
@@ -15,6 +15,7 @@ const TABS = [
   { id: 'music', label: 'Muziek', icon: Music },
   { id: 'requests', label: 'Aanvragen', icon: UserCheck },
   { id: 'feedback', label: 'Berichten', icon: MessageSquare },
+  { id: 'removals', label: 'Verwijderverzoeken', icon: AlertTriangle },
 ]
 
 const TYPE_ICONS = {
@@ -225,7 +226,9 @@ export default function AdminPage() {
     : activeTab === 'requests'
     ? pendingUsers
     : activeTab === 'feedback'
-    ? feedback
+    ? feedback.filter((f) => f.type !== 'removal')
+    : activeTab === 'removals'
+    ? feedback.filter((f) => f.type === 'removal')
     : groupedMemories[activeTab]
 
   return (
@@ -291,7 +294,9 @@ export default function AdminPage() {
               : tab.id === 'requests'
               ? pendingUsers.length
               : tab.id === 'feedback'
-              ? feedback.filter((f) => !f.resolved).length
+              ? feedback.filter((f) => !f.resolved && f.type !== 'removal').length
+              : tab.id === 'removals'
+              ? feedback.filter((f) => !f.resolved && f.type === 'removal').length
               : groupedMemories[tab.id].length
             const active = activeTab === tab.id
 
@@ -329,10 +334,20 @@ export default function AdminPage() {
             />
           ) : activeTab === 'feedback' ? (
             <FeedbackPanel
-              feedback={feedback}
+              feedback={feedback.filter((f) => f.type !== 'removal')}
               busyId={busyId}
               onToggleResolved={handleToggleFeedbackResolved}
               onDelete={handleDeleteFeedback}
+            />
+          ) : activeTab === 'removals' ? (
+            <RemovalsPanel
+              feedback={feedback}
+              memories={memories}
+              busyId={busyId}
+              onToggleResolved={handleToggleFeedbackResolved}
+              onDeleteFeedback={handleDeleteFeedback}
+              onDeleteMemory={handleDeleteMemory}
+              onUpdateMemory={handleUpdateMemory}
             />
           ) : activeItems.length === 0 ? (
             <div className="flex min-h-48 items-center justify-center text-center text-sm text-white/45">
@@ -989,6 +1004,310 @@ function FeedbackCard({ item, busy, onToggleResolved, onDelete }) {
           <Trash2 size={14} />
           Verwijder
         </button>
+      </div>
+    </article>
+  )
+}
+
+function RemovalsPanel({ feedback, memories, busyId, onToggleResolved, onDeleteFeedback, onDeleteMemory, onUpdateMemory }) {
+  const unresolvedRemovals = feedback.filter((f) => f.type === 'removal' && !f.resolved)
+  const resolvedRemovals = feedback.filter((f) => f.type === 'removal' && f.resolved)
+
+  return (
+    <div className="grid gap-8">
+      <section>
+        <div className="mb-4 flex items-center justify-between gap-3">
+          <div>
+            <h2 className="text-xl font-light text-white">Nieuwe verwijderverzoeken ({unresolvedRemovals.length})</h2>
+            <p className="text-sm text-white/45">Openstaande aanvragen om afbeeldingen of content offline te halen.</p>
+          </div>
+        </div>
+
+        {unresolvedRemovals.length === 0 ? (
+          <div className="rounded-3xl border border-white/10 bg-white/[0.04] p-5 text-sm text-white/45">
+            Geen nieuwe verwijderverzoeken.
+          </div>
+        ) : (
+          <div className="grid gap-4">
+            {unresolvedRemovals.map((item) => (
+              <RemovalCard
+                key={item.id}
+                item={item}
+                memories={memories}
+                busy={busyId === item.id}
+                onToggleResolved={onToggleResolved}
+                onDeleteFeedback={onDeleteFeedback}
+                onDeleteMemory={onDeleteMemory}
+                onUpdateMemory={onUpdateMemory}
+              />
+            ))}
+          </div>
+        )}
+      </section>
+
+      {resolvedRemovals.length > 0 && (
+        <section>
+          <div className="mb-4 flex items-center justify-between gap-3">
+            <div>
+              <h2 className="text-xl font-light text-white/70">Afgehandelde verzoeken ({resolvedRemovals.length})</h2>
+              <p className="text-sm text-white/45">Verzoeken die zijn goedgekeurd of genegeerd.</p>
+            </div>
+          </div>
+
+          <div className="grid gap-4">
+            {resolvedRemovals.map((item) => (
+              <RemovalCard
+                key={item.id}
+                item={item}
+                memories={memories}
+                busy={busyId === item.id}
+                onToggleResolved={onToggleResolved}
+                onDeleteFeedback={onDeleteFeedback}
+                onDeleteMemory={onDeleteMemory}
+                onUpdateMemory={onUpdateMemory}
+              />
+            ))}
+          </div>
+        </section>
+      )}
+    </div>
+  )
+}
+
+function RemovalCard({ item, memories, busy, onToggleResolved, onDeleteFeedback, onDeleteMemory, onUpdateMemory }) {
+  const isAnon = item.isAnonymous === true
+  let requestData = null
+  try {
+    if (item.message.trim().startsWith('{')) {
+      requestData = JSON.parse(item.message)
+    }
+  } catch (e) {
+    // Ignore
+  }
+
+  const memoryId = requestData?.memoryId
+  const targetMemory = memories.find((m) => m.id === memoryId)
+  const selectedAssets = requestData?.selectedAssets || []
+  const reason = requestData?.reason || (requestData ? '' : item.message)
+
+  const [localBusy, setLocalBusy] = useState(false)
+
+  async function handleIgnore() {
+    setLocalBusy(true)
+    try {
+      await onToggleResolved(item)
+    } finally {
+      setLocalBusy(false)
+    }
+  }
+
+  async function handleDeleteEntire() {
+    if (!targetMemory) return
+    const confirmed = window.confirm(`Weet je zeker dat je de gehele herinnering "${targetMemory.title}" wilt verwijderen?`)
+    if (!confirmed) return
+
+    setLocalBusy(true)
+    try {
+      await onDeleteMemory(targetMemory)
+      if (!item.resolved) {
+        await onToggleResolved(item)
+      }
+    } catch (e) {
+      console.error(e)
+    } finally {
+      setLocalBusy(false)
+    }
+  }
+
+  async function handleRemoveSelected() {
+    if (!targetMemory || !targetMemory.collageData) return
+    const confirmed = window.confirm(`Weet je zeker dat je de geselecteerde ${selectedAssets.length} foto('s) uit de collage wilt verwijderen?`)
+    if (!confirmed) return
+
+    setLocalBusy(true)
+    try {
+      const remainingAssets = targetMemory.collageData.assets.filter(
+        (asset) => !selectedAssets.includes(asset.url)
+      )
+
+      if (remainingAssets.length === 0) {
+        await onDeleteMemory(targetMemory)
+      } else {
+        const updatedBody = JSON.stringify({
+          ...targetMemory.collageData,
+          assets: remainingAssets,
+        })
+        await onUpdateMemory(targetMemory, {
+          title: targetMemory.title,
+          author: targetMemory.author,
+          body: updatedBody,
+        })
+      }
+
+      if (!item.resolved) {
+        await onToggleResolved(item)
+      }
+    } catch (err) {
+      alert('Fout bij het bijwerken van de collage: ' + err.message)
+    } finally {
+      setLocalBusy(false)
+    }
+  }
+
+  const isCollage = targetMemory && !!targetMemory.collageData
+  const activeBusy = busy || localBusy
+
+  return (
+    <article className="rounded-3xl border border-white/10 bg-white/[0.04] p-5">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        <div className="flex-1">
+          <div className="mb-3 flex flex-wrap items-center gap-2">
+            <span className="rounded-full border border-white/10 px-3 py-1 text-[0.65rem] uppercase tracking-[0.18em] text-white/45">
+              {formatDate(item.createdAt)}
+            </span>
+            {item.resolved ? (
+              <span className="rounded-full border border-white/20 bg-white/5 px-3 py-1 text-[0.65rem] uppercase tracking-[0.18em] text-white/35">
+                Opgelost
+              </span>
+            ) : (
+              <span className="rounded-full border border-rose-500/30 bg-rose-500/20 px-3 py-1 text-[0.65rem] uppercase tracking-[0.18em] text-rose-200">
+                Verwijderverzoek
+              </span>
+            )}
+            {isAnon && (
+              <span className="rounded-full border border-amber-500/30 bg-amber-500/20 px-3 py-1 text-[0.65rem] uppercase tracking-[0.18em] text-amber-200">
+                Anoniem
+              </span>
+            )}
+          </div>
+
+          <h3 className="text-lg font-light text-white">
+            Indiener: {isAnon ? 'Anoniem' : item.userName}
+          </h3>
+          {!isAnon && <p className="text-xs text-white/45 break-all">{item.userEmail}</p>}
+
+          {reason && (
+            <div className="mt-4">
+              <span className="text-[0.65rem] uppercase tracking-wider text-white/35">Reden / Toelichting</span>
+              <div className="mt-1 rounded-2xl bg-black/20 p-4 border border-white/5 text-sm leading-6 text-white/70 whitespace-pre-wrap">
+                {reason}
+              </div>
+            </div>
+          )}
+        </div>
+
+        <div className="flex flex-row flex-wrap gap-2 sm:flex-col sm:items-stretch sm:justify-start sm:w-48 shrink-0">
+          <button
+            type="button"
+            disabled={activeBusy}
+            onClick={handleIgnore}
+            className={`inline-flex items-center justify-center gap-2 rounded-full border px-4 py-2 text-xs transition disabled:opacity-50 ${
+              item.resolved
+                ? 'border-white/10 text-white/60 hover:bg-white/10'
+                : 'border-emerald-200/20 text-emerald-100 hover:bg-emerald-300/10'
+            }`}
+          >
+            <Check size={14} />
+            {item.resolved ? 'Markeer als open' : 'Markeer opgelost'}
+          </button>
+
+          {targetMemory && (
+            <button
+              type="button"
+              disabled={activeBusy}
+              onClick={handleDeleteEntire}
+              className="inline-flex items-center justify-center gap-2 rounded-full border border-rose-200/20 bg-rose-500/10 px-4 py-2 text-xs text-rose-100 transition hover:bg-rose-500/20 disabled:opacity-50"
+            >
+              <Trash2 size={14} />
+              Verwijder geheel
+            </button>
+          )}
+
+          {isCollage && selectedAssets.length > 0 && selectedAssets.length < targetMemory.collageData.assets.length && (
+            <button
+              type="button"
+              disabled={activeBusy}
+              onClick={handleRemoveSelected}
+              className="inline-flex items-center justify-center gap-2 rounded-full border border-purple-300/20 bg-purple-500/15 px-4 py-2 text-xs text-purple-200 transition hover:bg-purple-500/25 disabled:opacity-50"
+            >
+              <Trash2 size={14} />
+              Verwijder geselecteerde
+            </button>
+          )}
+
+          <button
+            type="button"
+            disabled={activeBusy}
+            onClick={() => onDeleteFeedback(item)}
+            className="inline-flex items-center justify-center gap-2 rounded-full border border-white/10 px-4 py-2 text-xs text-white/45 transition hover:bg-white/10 disabled:opacity-50"
+          >
+            <X size={14} />
+            Verwijder verzoek
+          </button>
+        </div>
+      </div>
+
+      <div className="mt-6 border-t border-white/5 pt-5">
+        <h4 className="text-xs uppercase tracking-[0.18em] text-white/35 mb-3">Betreft Herinnering</h4>
+        {targetMemory ? (
+          <div className="flex flex-col gap-4 rounded-2xl bg-black/10 p-4 border border-white/5 sm:flex-row">
+            <div className="h-24 w-24 shrink-0 overflow-hidden rounded-xl border border-white/10 bg-black/30">
+              {targetMemory.mediaUrl ? (
+                targetMemory.mediaResourceType === 'video' || targetMemory.type === 'video' ? (
+                  <video src={targetMemory.mediaUrl} className="h-full w-full object-cover" muted />
+                ) : (
+                  <img src={targetMemory.mediaThumbnailUrl || targetMemory.mediaUrl} alt={targetMemory.title} className="h-full w-full object-cover" />
+                )
+              ) : (
+                <div className="flex h-full items-center justify-center text-white/25">
+                  {targetMemory.type === 'quote' ? <Quote size={20} /> : <FileText size={20} />}
+                </div>
+              )}
+            </div>
+
+            <div className="flex-1 min-w-0">
+              <h5 className="text-sm font-medium text-white truncate">{targetMemory.title}</h5>
+              <p className="text-xs text-white/45 mt-1">Type: {targetMemory.type} · Ingezonden door: {targetMemory.author || 'Onbekend'}</p>
+              <p className="text-[10px] text-white/25 break-all mt-1">ID: {targetMemory.id}</p>
+
+              {isCollage && (
+                <div className="mt-4">
+                  <span className="text-[10px] uppercase tracking-wider text-purple-200/50">Geselecteerde afbeelding(en) voor verwijdering:</span>
+                  <div className="grid grid-cols-4 gap-2 mt-2 max-w-md">
+                    {targetMemory.collageData.assets.map((asset, idx) => {
+                      const isRequestedToRemove = selectedAssets.includes(asset.url)
+                      return (
+                        <div
+                          key={asset.url}
+                          className={`relative aspect-square rounded-lg overflow-hidden border ${
+                            isRequestedToRemove
+                              ? 'border-rose-500/50 ring-2 ring-rose-500/30'
+                              : 'border-white/10 opacity-40'
+                          }`}
+                        >
+                          {asset.resourceType === 'video' ? (
+                            <video src={asset.url} className="h-full w-full object-cover" muted />
+                          ) : (
+                            <img src={asset.url} alt={`Collage asset ${idx + 1}`} className="h-full w-full object-cover" />
+                          )}
+                          {isRequestedToRemove && (
+                            <div className="absolute inset-0 bg-rose-500/10 flex items-center justify-center text-[10px] font-semibold text-rose-200">
+                              Verwijder
+                            </div>
+                          )}
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        ) : (
+          <div className="rounded-2xl bg-rose-950/20 p-4 border border-rose-500/10 text-xs text-rose-200/60">
+            Deze herinnering is al verwijderd of kan niet worden gevonden (ID: {memoryId}).
+          </div>
+        )}
       </div>
     </article>
   )

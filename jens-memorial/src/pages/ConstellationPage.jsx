@@ -3,12 +3,13 @@ import { Link } from 'react-router-dom'
 import ForceGraph3D from '3d-force-graph'
 import * as THREE from 'three'
 import { AnimatePresence, motion } from 'framer-motion'
-import { Heart, Music, Pause, PenLine, Play, SkipBack, SkipForward, Shield, User, Volume2, VolumeX, X, ChevronLeft, ChevronRight } from 'lucide-react'
+import { Heart, Music, Pause, PenLine, Play, SkipBack, SkipForward, Shield, User, Volume2, VolumeX, X, ChevronLeft, ChevronRight, MoreHorizontal, AlertTriangle } from 'lucide-react'
 import { useAmbientAudio } from '../context/AmbientAudioContext'
 import { useAuth } from '../context/AuthContext'
 import { useMusicPlayer } from '../context/MusicPlayerContext'
 import { JOURNEY_TRANSITION_KEY } from '../lib/journey'
 import { CORE_MEMORY_CANDLE_THRESHOLD, fetchMemories, fetchUserCandleIds, lightCandle, removeCandle } from '../lib/memories'
+import { submitFeedback, notifyFeedback } from '../lib/feedback'
 
 const CUSTOM_MEMORIES_KEY = 'jens-custom-memories'
 const PULSING_MEMORIES_KEY = 'jens-pulsing-memory-ids'
@@ -1082,10 +1083,101 @@ function VideoPlayer({ src, poster }) {
 
 function MemoryOverlay({ memory, candleLit, onToggleCandle, onClose, onPrevious, onNext }) {
   const { unduck } = useAmbientAudio()
+  const { user, userRecord } = useAuth()
   const [carouselIndex, setCarouselIndex] = useState(0)
+
+  const [showMenu, setShowMenu] = useState(false)
+  const [showRemovalForm, setShowRemovalForm] = useState(false)
+  const [removalReason, setRemovalReason] = useState('')
+  const [removalAnon, setRemovalAnon] = useState(false)
+  const [selectedCollageAssets, setSelectedCollageAssets] = useState([])
+  const [submittingRemoval, setSubmittingRemoval] = useState(false)
+  const [removalSuccess, setRemovalSuccess] = useState(false)
+  const [removalError, setRemovalError] = useState('')
 
   const touchStartX = useRef(0)
   const touchEndX = useRef(0)
+
+  const handleRemovalSubmit = async (e) => {
+    e.preventDefault()
+    setSubmittingRemoval(true)
+    setRemovalError('')
+    setRemovalSuccess(false)
+
+    try {
+      const email = userRecord?.email || user?.email || 'Onbekend'
+      const name = userRecord?.name || user?.user_metadata?.full_name || user?.user_metadata?.name || email.split('@')[0]
+      const userId = user?.id || null
+
+      const isCollage = (memory.type === 'foto' || memory.type === 'video') && !!memory.collageData
+      
+      let selectedItemsDetails = ''
+      if (isCollage) {
+        if (selectedCollageAssets.length === 0) {
+          throw new Error('Selecteer ten minste één afbeelding of video om te verwijderen.')
+        }
+        selectedItemsDetails = `Geselecteerde afbeeldingen/video's voor verwijdering:\n` + 
+          selectedCollageAssets.map((url, i) => `- Item ${i + 1}: ${url}`).join('\n')
+      } else {
+        selectedItemsDetails = `Volledige herinnering (enkele afbeelding/video/tekst)\nMedia URL: ${memory.mediaUrl || 'Nee'}`
+      }
+
+      const dbMessageObj = {
+        isRemovalRequest: true,
+        memoryId: memory.id,
+        memoryTitle: memory.title,
+        memoryType: memory.type,
+        reason: removalReason.trim(),
+        selectedAssets: isCollage ? selectedCollageAssets : [memory.mediaUrl].filter(Boolean),
+      }
+
+      const emailText = `DIT IS EEN VERWIJDERVERZOEK VOOR CONTENT!
+
+Herinnering Titel: "${memory.title}"
+Type: ${memory.type}
+Ingezonden door: ${memory.author || 'Onbekend'}
+Memory ID: ${memory.id}
+
+Aangevraagd door: ${removalAnon ? 'Anoniem' : `${name} (${email})`}
+
+Reden voor verwijdering:
+"${removalReason.trim() || 'Geen reden opgegeven'}"
+
+${selectedItemsDetails}
+
+Je kunt dit verzoek bekijken in het adminpaneel.`
+
+      await submitFeedback({
+        userId,
+        userEmail: email,
+        userName: name,
+        type: 'removal',
+        message: JSON.stringify(dbMessageObj),
+        isAnonymous: removalAnon,
+      })
+
+      await notifyFeedback({
+        email,
+        name,
+        type: 'removal',
+        message: emailText,
+        isAnonymous: removalAnon,
+      })
+
+      setRemovalSuccess(true)
+      setTimeout(() => {
+        setShowRemovalForm(false)
+        setRemovalSuccess(false)
+        setRemovalReason('')
+        setSelectedCollageAssets([])
+      }, 2500)
+    } catch (err) {
+      console.error('Removal request submit error:', err)
+      setRemovalError(err.message || 'Kon verzoek niet indienen. Probeer het later opnieuw.')
+    } finally {
+      setSubmittingRemoval(false)
+    }
+  }
 
   const handleTouchStart = (e) => {
     touchStartX.current = e.changedTouches[0].screenX
@@ -1181,201 +1273,364 @@ function MemoryOverlay({ memory, candleLit, onToggleCandle, onClose, onPrevious,
         exit={{ opacity: 0, scale: 0.96, y: 16 }}
         onMouseDown={(event) => event.stopPropagation()}
       >
-        <button
-          type="button"
-          onClick={onClose}
-          className="absolute right-5 top-5 rounded-full p-2 text-purple-100/50 transition hover:bg-white/10 hover:text-purple-100"
-        >
-          <X size={18} />
-        </button>
+        {showRemovalForm ? (
+          <div className="relative text-left">
+            <h3 className="text-2xl font-light text-white tracking-wide mb-2 font-extralight tracking-[0.1em]">Verwijdering aanvragen</h3>
+            <p className="text-xs text-white/45 mb-6">Vraag de beheerder om dit stukje content offline te halen.</p>
 
-        <p className="mb-4 text-xs uppercase tracking-[0.3em]" style={{ color: memory.special ? 'var(--accent-gold)' : 'var(--text-muted)' }}>
-          {memory.collageData ? 'collage' : memory.type} · {memory.date}
-        </p>
-        <h2 className="pr-10 text-3xl font-light leading-tight" style={{ color: 'var(--text-primary)' }}>
-          {memory.title}
-        </h2>
-        {memory.author && (
-          <p className="mt-2 text-sm" style={{ color: 'var(--text-muted)' }}>
-            Ingezonden door {memory.author}
-          </p>
-        )}
+            {removalSuccess && (
+              <div className="mb-6 rounded-2xl border border-emerald-500/25 bg-emerald-500/10 p-4 text-sm text-emerald-200">
+                Je verzoek is ingediend. Er is een e-mail gestuurd naar de beheerder.
+              </div>
+            )}
 
-        {(() => {
-          const isCollage = (memory.type === 'foto' || memory.type === 'video') && memory.collageData
-          if (isCollage) {
-            const assets = memory.collageData.assets || []
-            if (assets.length === 0) return null
-            const currentAsset = assets[carouselIndex]
+            {removalError && (
+              <div className="mb-6 rounded-2xl border border-rose-500/25 bg-rose-500/10 p-4 text-sm text-rose-200">
+                {removalError}
+              </div>
+            )}
 
-            return (
-              <div className="relative mt-6 overflow-hidden rounded-2xl border border-purple-200/10 bg-black/25 select-none">
-                <div
-                  onTouchStart={handleTouchStart}
-                  onTouchEnd={handleTouchEnd}
-                  className="w-full flex items-center justify-center min-h-[200px]"
-                >
-                  <AnimatePresence mode="wait">
-                    <motion.div
-                      key={carouselIndex}
-                      initial={{ opacity: 0, x: 20 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      exit={{ opacity: 0, x: -20 }}
-                      transition={{ duration: 0.22 }}
-                      className="w-full flex items-center justify-center"
-                    >
-                      {currentAsset.resourceType === 'video' ? (
-                        <VideoPlayer src={currentAsset.url} poster={currentAsset.thumbnailUrl || undefined} />
-                      ) : (
-                        <img src={currentAsset.url} alt={`${memory.title} slide ${carouselIndex + 1}`} className="max-h-[52vh] w-full object-contain" />
-                      )}
-                    </motion.div>
-                  </AnimatePresence>
-                </div>
-
-                {/* Navigation Arrows */}
-                {assets.length > 1 && (
-                  <>
-                    <button
-                      type="button"
-                      onClick={() => setCarouselIndex((prev) => Math.max(prev - 1, 0))}
-                      disabled={carouselIndex === 0}
-                      className="absolute left-3 top-1/2 -translate-y-1/2 hidden sm:flex h-9 w-9 items-center justify-center rounded-full bg-black/50 text-white/70 backdrop-blur-sm transition hover:bg-black/75 hover:text-white disabled:opacity-0 disabled:pointer-events-none"
-                    >
-                      <ChevronLeft size={20} />
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setCarouselIndex((prev) => Math.min(prev + 1, assets.length - 1))}
-                      disabled={carouselIndex === assets.length - 1}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 hidden sm:flex h-9 w-9 items-center justify-center rounded-full bg-black/50 text-white/70 backdrop-blur-sm transition hover:bg-black/75 hover:text-white disabled:opacity-0 disabled:pointer-events-none"
-                    >
-                      <ChevronRight size={20} />
-                    </button>
-                  </>
-                )}
-
-                {/* Dot Indicators */}
-                {assets.length > 1 && (
-                  <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex gap-1.5 z-10 bg-black/45 px-3 py-1.5 rounded-full backdrop-blur-md">
-                    {assets.map((_, i) => (
-                      <button
-                        key={i}
-                        type="button"
-                        onClick={() => setCarouselIndex(i)}
-                        className={`h-1.5 rounded-full transition-all duration-300 ${
-                          i === carouselIndex ? 'w-3.5 bg-white' : 'w-1.5 bg-white/40'
-                        }`}
-                      />
-                    ))}
+            <form onSubmit={handleRemovalSubmit} className="space-y-5">
+              {memory.collageData && memory.collageData.assets?.length > 0 && (
+                <div>
+                  <label className="mb-2 block text-xs uppercase tracking-[0.22em] text-white/35">
+                    Kies welke afbeelding(en) of video's je wilt verwijderen:
+                  </label>
+                  <div className="grid grid-cols-3 gap-3">
+                    {memory.collageData.assets.map((asset, idx) => {
+                      const isSelected = selectedCollageAssets.includes(asset.url)
+                      return (
+                        <button
+                          type="button"
+                          key={asset.url}
+                          onClick={() => {
+                            if (isSelected) {
+                              setSelectedCollageAssets(prev => prev.filter(url => url !== asset.url))
+                            } else {
+                              setSelectedCollageAssets(prev => [...prev, asset.url])
+                            }
+                          }}
+                          className={`relative aspect-square rounded-2xl overflow-hidden border-2 transition ${
+                            isSelected ? 'border-purple-400 ring-4 ring-purple-400/20' : 'border-white/10 opacity-50 hover:opacity-90'
+                          }`}
+                        >
+                          {asset.resourceType === 'video' ? (
+                            <video src={asset.url} className="h-full w-full object-cover" muted />
+                          ) : (
+                            <img src={asset.url} alt={`Collage item ${idx + 1}`} className="h-full w-full object-cover" />
+                          )}
+                          <div className={`absolute top-2 right-2 flex h-5 w-5 items-center justify-center rounded-full border text-[10px] font-bold ${
+                            isSelected ? 'bg-purple-500 border-purple-400 text-white' : 'bg-black/60 border-white/30 text-white/40'
+                          }`}>
+                            {isSelected ? '✓' : ''}
+                          </div>
+                        </button>
+                      )
+                    })}
                   </div>
-                )}
+                </div>
+              )}
+
+              <div>
+                <label className="mb-2 flex items-center justify-between text-xs uppercase tracking-[0.22em] text-white/35">
+                  <span>Reden voor verwijdering (optioneel)</span>
+                  <span className="tracking-normal text-white/25">{removalReason.length}/500</span>
+                </label>
+                <textarea
+                  value={removalReason}
+                  onChange={(e) => setRemovalReason(e.target.value.slice(0, 500))}
+                  rows={4}
+                  className="w-full resize-none rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm leading-6 text-white outline-none transition focus:border-purple-200/40"
+                  placeholder="Bijv. Ik sta ongemakkelijk op deze foto, of deze video hoort hier niet thuis..."
+                />
               </div>
-            )
-          }
 
-          if (memory.mediaUrl) {
-            return (
-              <div className="mt-6 overflow-hidden rounded-2xl border border-purple-200/10 bg-black/25">
-                {memory.mediaResourceType === 'video' || memory.type === 'video' ? (
-                  <VideoPlayer src={memory.mediaUrl} poster={memory.mediaThumbnailUrl || undefined} />
-                ) : (
-                  <img src={memory.mediaUrl} alt={memory.title} className="max-h-[52vh] w-full object-contain" />
-                )}
+              <div className="flex items-start gap-3 rounded-2xl border border-white/5 bg-white/[0.02] p-4">
+                <input
+                  type="checkbox"
+                  id="removalAnon"
+                  checked={removalAnon}
+                  onChange={(e) => setRemovalAnon(e.target.checked)}
+                  className="mt-1 h-4 w-4 rounded border-white/20 bg-white/5 text-purple-600 focus:ring-purple-500 cursor-pointer"
+                />
+                <label htmlFor="removalAnon" className="text-xs text-white/55 cursor-pointer select-none leading-5">
+                  <span className="block font-medium text-white/80">Stuur anoniem</span>
+                  Vink dit aan als je je e-mail en naam niet wilt meesturen met dit verzoek.
+                </label>
               </div>
-            )
-          }
 
-          return null
-        })()}
+              <div className="flex gap-3 pt-2">
+                <button
+                  type="submit"
+                  disabled={submittingRemoval || removalSuccess}
+                  className="flex-1 inline-flex items-center justify-center gap-2 rounded-full bg-white px-5 py-3 text-sm font-medium text-black transition hover:bg-purple-100 disabled:opacity-50 active:scale-[0.98]"
+                >
+                  {submittingRemoval ? 'Verzenden...' : 'Dien verzoek in'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowRemovalForm(false)
+                    setRemovalReason('')
+                    setSelectedCollageAssets([])
+                  }}
+                  disabled={submittingRemoval}
+                  className="flex-1 inline-flex items-center justify-center gap-2 rounded-full border border-white/10 bg-white/5 px-5 py-3 text-sm font-medium text-white transition hover:bg-white/10 disabled:opacity-50 active:scale-[0.98]"
+                >
+                  Annuleren
+                </button>
+              </div>
+            </form>
+          </div>
+        ) : (
+          <>
+            <button
+              type="button"
+              onClick={onClose}
+              className="absolute right-5 top-5 rounded-full p-2 text-purple-100/50 transition hover:bg-white/10 hover:text-purple-100"
+            >
+              <X size={18} />
+            </button>
 
-        {(() => {
-          const isQuoteJson = memory.type === 'quote' && memory.quoteData
-          const quoteText = isQuoteJson ? memory.quoteData.quote : memory.body
-          const quoteBy = isQuoteJson ? memory.quoteData.quoteBy : null
-          const month = isQuoteJson ? memory.quoteData.month : null
-          const year = isQuoteJson ? memory.quoteData.year : null
-          const context = isQuoteJson ? memory.quoteData.context : null
+            <p className="mb-4 text-xs uppercase tracking-[0.3em]" style={{ color: memory.special ? 'var(--accent-gold)' : 'var(--text-muted)' }}>
+              {memory.collageData ? 'collage' : memory.type} · {memory.date}
+            </p>
+            <h2 className="pr-10 text-3xl font-light leading-tight" style={{ color: 'var(--text-primary)' }}>
+              {memory.title}
+            </h2>
+            {memory.author && (
+              <p className="mt-2 text-sm" style={{ color: 'var(--text-muted)' }}>
+                Ingezonden door {memory.author}
+              </p>
+            )}
 
-          const dateParts = []
-          if (month) dateParts.push(month)
-          if (year) dateParts.push(year)
-          const dateString = dateParts.join(' ')
+            {(() => {
+              const isCollage = (memory.type === 'foto' || memory.type === 'video') && memory.collageData
+              if (isCollage) {
+                const assets = memory.collageData.assets || []
+                if (assets.length === 0) return null
+                const currentAsset = assets[carouselIndex]
 
-          if (memory.type === 'quote') {
-            return (
-              <div className="my-7">
-                <div className="rounded-2xl border border-purple-200/10 bg-white/[0.03] p-6">
-                  <p className="text-2xl font-light leading-relaxed whitespace-pre-wrap" style={{ color: 'var(--text-primary)' }}>
-                    {quoteText}
-                  </p>
-                  {(quoteBy || dateString) && (
-                    <p className="mt-4 text-right text-sm italic" style={{ color: 'var(--text-muted)' }}>
-                      — {quoteBy || ''}{quoteBy && dateString ? ', ' : ''}{dateString}
+                return (
+                  <div className="relative mt-6 overflow-hidden rounded-2xl border border-purple-200/10 bg-black/25 select-none">
+                    <div
+                      onTouchStart={handleTouchStart}
+                      onTouchEnd={handleTouchEnd}
+                      className="w-full flex items-center justify-center min-h-[200px]"
+                    >
+                      <AnimatePresence mode="wait">
+                        <motion.div
+                          key={carouselIndex}
+                          initial={{ opacity: 0, x: 20 }}
+                          animate={{ opacity: 1, x: 0 }}
+                          exit={{ opacity: 0, x: -20 }}
+                          transition={{ duration: 0.22 }}
+                          className="w-full flex items-center justify-center"
+                        >
+                          {currentAsset.resourceType === 'video' ? (
+                            <VideoPlayer src={currentAsset.url} poster={currentAsset.thumbnailUrl || undefined} />
+                          ) : (
+                            <img src={currentAsset.url} alt={`${memory.title} slide ${carouselIndex + 1}`} className="max-h-[52vh] w-full object-contain" />
+                          )}
+                        </motion.div>
+                      </AnimatePresence>
+                    </div>
+
+                    {/* Navigation Arrows */}
+                    {assets.length > 1 && (
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => setCarouselIndex((prev) => Math.max(prev - 1, 0))}
+                          disabled={carouselIndex === 0}
+                          className="absolute left-3 top-1/2 -translate-y-1/2 hidden sm:flex h-9 w-9 items-center justify-center rounded-full bg-black/50 text-white/70 backdrop-blur-sm transition hover:bg-black/75 hover:text-white disabled:opacity-0 disabled:pointer-events-none"
+                        >
+                          <ChevronLeft size={20} />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setCarouselIndex((prev) => Math.min(prev + 1, assets.length - 1))}
+                          disabled={carouselIndex === assets.length - 1}
+                          className="absolute right-3 top-1/2 -translate-y-1/2 hidden sm:flex h-9 w-9 items-center justify-center rounded-full bg-black/50 text-white/70 backdrop-blur-sm transition hover:bg-black/75 hover:text-white disabled:opacity-0 disabled:pointer-events-none"
+                        >
+                          <ChevronRight size={20} />
+                        </button>
+                      </>
+                    )}
+
+                    {/* Dot Indicators */}
+                    {assets.length > 1 && (
+                      <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex gap-1.5 z-10 bg-black/45 px-3 py-1.5 rounded-full backdrop-blur-md">
+                        {assets.map((_, i) => (
+                          <button
+                            key={i}
+                            type="button"
+                            onClick={() => setCarouselIndex(i)}
+                            className={`h-1.5 rounded-full transition-all duration-300 ${
+                              i === carouselIndex ? 'w-3.5 bg-white' : 'w-1.5 bg-white/40'
+                            }`}
+                          />
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )
+              }
+
+              if (memory.mediaUrl) {
+                return (
+                  <div className="relative mt-6 overflow-hidden rounded-2xl border border-purple-200/10 bg-black/25">
+                    {memory.mediaResourceType === 'video' || memory.type === 'video' ? (
+                      <VideoPlayer src={memory.mediaUrl} poster={memory.mediaThumbnailUrl || undefined} />
+                    ) : (
+                      <img src={memory.mediaUrl} alt={memory.title} className="max-h-[52vh] w-full object-contain" />
+                    )}
+                  </div>
+                )
+              }
+
+              return null
+            })()}
+
+            {(() => {
+              const isQuoteJson = memory.type === 'quote' && memory.quoteData
+              const quoteText = isQuoteJson ? memory.quoteData.quote : memory.body
+              const quoteBy = isQuoteJson ? memory.quoteData.quoteBy : null
+              const month = isQuoteJson ? memory.quoteData.month : null
+              const year = isQuoteJson ? memory.quoteData.year : null
+              const context = isQuoteJson ? memory.quoteData.context : null
+
+              const dateParts = []
+              if (month) dateParts.push(month)
+              if (year) dateParts.push(year)
+              const dateString = dateParts.join(' ')
+
+              if (memory.type === 'quote') {
+                return (
+                  <div className="my-7">
+                    <div className="rounded-2xl border border-purple-200/10 bg-white/[0.03] p-6">
+                      <p className="text-2xl font-light leading-relaxed whitespace-pre-wrap" style={{ color: 'var(--text-primary)' }}>
+                        {quoteText}
+                      </p>
+                      {(quoteBy || dateString) && (
+                        <p className="mt-4 text-right text-sm italic" style={{ color: 'var(--text-muted)' }}>
+                          — {quoteBy || ''}{quoteBy && dateString ? ', ' : ''}{dateString}
+                        </p>
+                      )}
+                    </div>
+                    {context && (
+                      <div className="mt-4 rounded-2xl border border-purple-200/10 bg-white/[0.01] p-5">
+                        <p className="text-sm leading-7 whitespace-pre-wrap" style={{ color: 'var(--text-muted)' }}>
+                          {context}
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                )
+              }
+
+              const isCollage = (memory.type === 'foto' || memory.type === 'video') && memory.collageData
+              const bodyText = isCollage ? memory.collageData.caption : memory.body
+
+              return (
+                bodyText && (
+                  <div className="my-7 rounded-2xl border border-purple-200/10 bg-white/[0.03] p-6">
+                    <p className="text-sm leading-7 whitespace-pre-wrap" style={{ color: 'var(--text-primary)' }}>
+                      {bodyText}
                     </p>
+                  </div>
+                )
+              )
+            })()}
+
+            <div className="flex items-center justify-between gap-4">
+              <button
+                type="button"
+                onClick={(event) => {
+                  event.preventDefault()
+                  event.stopPropagation()
+                  onToggleCandle()
+                }}
+                className={`flex items-center gap-2 rounded-full border px-4 py-2 text-xs transition ${
+                  candleLit ? 'border-rose-200/35 bg-rose-300/12 text-rose-100' : 'border-purple-200/15 hover:bg-white/10'
+                }`}
+                style={{ color: candleLit ? '#fecdd3' : 'var(--text-muted)' }}
+              >
+                <Heart size={15} fill={candleLit ? 'currentColor' : 'none'} />
+                Kaarsje
+              </button>
+
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={onPrevious}
+                  className="rounded-full border border-purple-200/15 px-4 py-2 text-xs transition hover:bg-white/10"
+                  style={{ color: 'var(--text-muted)' }}
+                >
+                  Vorige
+                </button>
+                <button
+                  type="button"
+                  onClick={onNext}
+                  className="rounded-full border border-purple-200/15 px-4 py-2 text-xs transition hover:bg-white/10"
+                  style={{ color: 'var(--text-muted)' }}
+                >
+                  Volgende
+                </button>
+
+                {/* Ellipsis menu button for removals */}
+                <div className="relative">
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.preventDefault()
+                      e.stopPropagation()
+                      setShowMenu(!showMenu)
+                    }}
+                    className={`rounded-full border p-2 transition ${
+                      showMenu ? 'border-purple-300/40 bg-purple-300/20 text-purple-100' : 'border-purple-200/15 text-purple-100/50 hover:bg-white/10 hover:text-purple-100'
+                    }`}
+                    title="Opties"
+                  >
+                    <MoreHorizontal size={15} />
+                  </button>
+
+                  {showMenu && (
+                    <>
+                      {/* Click outside overlay to close the dropdown menu */}
+                      <div 
+                        className="fixed inset-0 z-40" 
+                        onClick={(e) => {
+                          e.preventDefault()
+                          e.stopPropagation()
+                          setShowMenu(false)
+                        }} 
+                      />
+                      <div 
+                        className="absolute right-0 bottom-full mb-2 z-50 w-48 rounded-xl border border-purple-200/15 bg-[#120d28]/95 p-1.5 shadow-2xl backdrop-blur-xl"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.preventDefault()
+                            e.stopPropagation()
+                            setShowMenu(false)
+                            setShowRemovalForm(true)
+                          }}
+                          className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-xs text-rose-200 hover:bg-rose-500/10 transition"
+                        >
+                          <AlertTriangle size={14} />
+                          Verwijdering aanvragen
+                        </button>
+                      </div>
+                    </>
                   )}
                 </div>
-                {context && (
-                  <div className="mt-4 rounded-2xl border border-purple-200/10 bg-white/[0.01] p-5">
-                    <p className="text-sm leading-7 whitespace-pre-wrap" style={{ color: 'var(--text-muted)' }}>
-                      {context}
-                    </p>
-                  </div>
-                )}
               </div>
-            )
-          }
-
-          const isCollage = (memory.type === 'foto' || memory.type === 'video') && memory.collageData
-          const bodyText = isCollage ? memory.collageData.caption : memory.body
-
-          return (
-            bodyText && (
-              <div className="my-7 rounded-2xl border border-purple-200/10 bg-white/[0.03] p-6">
-                <p className="text-sm leading-7 whitespace-pre-wrap" style={{ color: 'var(--text-primary)' }}>
-                  {bodyText}
-                </p>
-              </div>
-            )
-          )
-        })()}
-
-        <div className="flex items-center justify-between gap-4">
-          <button
-            type="button"
-            onClick={(event) => {
-              event.preventDefault()
-              event.stopPropagation()
-              onToggleCandle()
-            }}
-            className={`flex items-center gap-2 rounded-full border px-4 py-2 text-xs transition ${
-              candleLit ? 'border-rose-200/35 bg-rose-300/12 text-rose-100' : 'border-purple-200/15 hover:bg-white/10'
-            }`}
-            style={{ color: candleLit ? '#fecdd3' : 'var(--text-muted)' }}
-          >
-            <Heart size={15} fill={candleLit ? 'currentColor' : 'none'} />
-            Kaarsje
-          </button>
-
-          <div className="flex gap-2">
-            <button
-              type="button"
-              onClick={onPrevious}
-              className="rounded-full border border-purple-200/15 px-4 py-2 text-xs transition hover:bg-white/10"
-              style={{ color: 'var(--text-muted)' }}
-            >
-              Vorige
-            </button>
-            <button
-              type="button"
-              onClick={onNext}
-              className="rounded-full border border-purple-200/15 px-4 py-2 text-xs transition hover:bg-white/10"
-              style={{ color: 'var(--text-muted)' }}
-            >
-              Volgende
-            </button>
-          </div>
-        </div>
+            </div>
+          </>
+        )}
       </motion.article>
     </motion.div>
   )
