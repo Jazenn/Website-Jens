@@ -330,7 +330,7 @@ export default function ConstellationPage() {
         setLoadingMemories(true)
         const [loadedMemories, loadedCandleIds] = await Promise.all([fetchMemories(), fetchUserCandleIds(user.id)])
         if (cancelled) return
-        setRemoteMemories(loadedMemories)
+        setRemoteMemories(loadedMemories.filter((m) => !m.title.startsWith('[HIDDEN]')))
         setLitCandleIds(loadedCandleIds)
       } catch (error) {
         console.error('Kon herinneringen niet laden uit Supabase:', error)
@@ -1095,6 +1095,8 @@ function MemoryOverlay({ memory, candleLit, onToggleCandle, onClose, onPrevious,
   const [removalSuccess, setRemovalSuccess] = useState(false)
   const [removalError, setRemovalError] = useState('')
 
+  const assets = useMemo(() => (memory.collageData?.assets || []).filter(a => !a.hidden), [memory.collageData])
+
   const touchStartX = useRef(0)
   const touchEndX = useRef(0)
 
@@ -1186,7 +1188,6 @@ Je kunt dit verzoek bekijken in het adminpaneel.`
   const handleTouchEnd = (e) => {
     touchEndX.current = e.changedTouches[0].screenX
     const diff = touchStartX.current - touchEndX.current
-    const assets = memory.collageData?.assets || []
     if (!assets.length) return
 
     if (diff > 50) {
@@ -1208,7 +1209,6 @@ Je kunt dit verzoek bekijken in het adminpaneel.`
   useEffect(() => {
     setCarouselIndex(0)
 
-    const assets = memory.collageData?.assets || []
     if (assets.length <= 1) return
 
     let active = true
@@ -1291,13 +1291,13 @@ Je kunt dit verzoek bekijken in het adminpaneel.`
             )}
 
             <form onSubmit={handleRemovalSubmit} className="space-y-5">
-              {memory.collageData && memory.collageData.assets?.length > 0 && (
+              {memory.collageData && assets.length > 0 && (
                 <div>
                   <label className="mb-2 block text-xs uppercase tracking-[0.22em] text-white/35">
                     Kies welke afbeelding(en) of video's je wilt verwijderen:
                   </label>
                   <div className="grid grid-cols-3 gap-3">
-                    {memory.collageData.assets.map((asset, idx) => {
+                    {assets.map((asset, idx) => {
                       const isSelected = selectedCollageAssets.includes(asset.url)
                       return (
                         <button
@@ -1407,7 +1407,6 @@ Je kunt dit verzoek bekijken in het adminpaneel.`
             {(() => {
               const isCollage = (memory.type === 'foto' || memory.type === 'video') && memory.collageData
               if (isCollage) {
-                const assets = memory.collageData.assets || []
                 if (assets.length === 0) return null
                 const currentAsset = assets[carouselIndex]
 

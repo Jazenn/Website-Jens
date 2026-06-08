@@ -51,6 +51,18 @@ export async function updateFeedbackResolved(feedbackId, resolved) {
   return mapFeedback(data)
 }
 
+export async function updateFeedbackResolvedAndMessage(feedbackId, resolved, message) {
+  const { data, error } = await supabase
+    .from('feedback')
+    .update({ resolved, message })
+    .eq('id', feedbackId)
+    .select('*')
+    .single()
+
+  if (error) throw error
+  return mapFeedback(data)
+}
+
 export async function deleteFeedback(feedbackId) {
   const { error } = await supabase
     .from('feedback')

@@ -5,7 +5,7 @@ import { deleteMemory, fetchMemories, updateMemory, updateMemoryCoreStatus } fro
 import { deleteTrack, fetchTracks, updateTrack } from '../lib/tracks'
 import { createWhitelistedUser, fetchUsers, updateUserAccess } from '../lib/users'
 import { useAuth } from '../context/AuthContext'
-import { fetchFeedback, updateFeedbackResolved, deleteFeedback } from '../lib/feedback'
+import { fetchFeedback, updateFeedbackResolved, deleteFeedback, updateFeedbackResolvedAndMessage } from '../lib/feedback'
 
 const TABS = [
   { id: 'foto', label: "Foto's", icon: Image },
@@ -58,10 +58,10 @@ export default function AdminPage() {
 
   const groupedMemories = useMemo(
     () => ({
-      foto: sortNewestFirst(memories.filter((memory) => memory.type === 'foto')),
-      video: sortNewestFirst(memories.filter((memory) => memory.type === 'video')),
-      quote: sortNewestFirst(memories.filter((memory) => memory.type === 'quote')),
-      tekst: sortNewestFirst(memories.filter((memory) => memory.type === 'tekst')),
+      foto: sortNewestFirst(memories.filter((memory) => memory.type === 'foto' && !memory.title.startsWith('[HIDDEN]'))),
+      video: sortNewestFirst(memories.filter((memory) => memory.type === 'video' && !memory.title.startsWith('[HIDDEN]'))),
+      quote: sortNewestFirst(memories.filter((memory) => memory.type === 'quote' && !memory.title.startsWith('[HIDDEN]'))),
+      tekst: sortNewestFirst(memories.filter((memory) => memory.type === 'tekst' && !memory.title.startsWith('[HIDDEN]'))),
     }),
     [memories]
   )
@@ -83,6 +83,68 @@ export default function AdminPage() {
       setTracks(loadedTracks)
       setUsers(loadedUsers)
       setFeedback(loadedFeedback)
+
+      // Automatic purge process for expired removal requests (older than 3 days)
+      const threeDaysAgo = Date.now() - 3 * 24 * 60 * 60 * 1000
+      let needsRefresh = false
+
+      for (const item of loadedFeedback) {
+        if (item.type === 'removal' && item.resolved) {
+          try {
+            if (item.message.trim().startsWith('{')) {
+              const requestData = JSON.parse(item.message)
+              if (requestData.resolvedAt) {
+                const resolvedTime = new Date(requestData.resolvedAt).getTime()
+                if (resolvedTime < threeDaysAgo) {
+                  const memoryId = requestData.memoryId
+                  const targetMem = loadedMemories.find((m) => m.id === memoryId)
+
+                  if (requestData.actionType === 'delete_entire') {
+                    if (targetMem) {
+                      await deleteMemory(memoryId)
+                    }
+                  } else if (requestData.actionType === 'delete_assets') {
+                    if (targetMem && targetMem.collageData) {
+                      const selectedAssets = requestData.selectedAssets || []
+                      const remainingAssets = targetMem.collageData.assets.filter(
+                        (asset) => !selectedAssets.includes(asset.url)
+                      )
+                      if (remainingAssets.length === 0) {
+                        await deleteMemory(memoryId)
+                      } else {
+                        const updatedBody = JSON.stringify({
+                          ...targetMem.collageData,
+                          assets: remainingAssets,
+                        })
+                        await updateMemory(memoryId, {
+                          title: targetMem.title,
+                          author: targetMem.author,
+                          body: updatedBody,
+                        })
+                      }
+                    }
+                  }
+
+                  // Delete the feedback record itself
+                  await deleteFeedback(item.id)
+                  needsRefresh = true
+                }
+              }
+            }
+          } catch (e) {
+            console.error('Error during auto-purging:', e)
+          }
+        }
+      }
+
+      if (needsRefresh) {
+        const [refreshedMemories, refreshedFeedback] = await Promise.all([
+          fetchMemories(),
+          fetchFeedback(),
+        ])
+        setMemories(refreshedMemories)
+        setFeedback(refreshedFeedback)
+      }
     } catch (loadError) {
       setError(loadError.message || 'Kon admin content niet laden.')
     } finally {
@@ -106,20 +168,95 @@ export default function AdminPage() {
     }
   }
 
+  async function handleResolveRemovalRequest(item, resolved, updatedMessage) {
+    try {
+      setBusyId(item.id)
+      const updated = await updateFeedbackResolvedAndMessage(item.id, resolved, updatedMessage)
+      setFeedback((current) => current.map((f) => (f.id === item.id ? updated : f)))
+    } catch (updateError) {
+      setError(updateError.message || 'Kon status niet aanpassen.')
+    } finally {
+      setBusyId(null)
+    }
+  }
+
   async function handleDeleteFeedback(item) {
-    const confirmed = window.confirm('Weet je zeker dat je dit bericht wilt verwijderen?')
+    const confirmed = window.confirm(
+      item.type === 'removal'
+        ? 'Weet je zeker dat je dit verwijderverzoek definitief wilt verwijderen? Eventuele verborgen content die aan dit verzoek is gekoppeld, wordt nu ook definitief verwijderd.'
+        : 'Weet je zeker dat je dit bericht wilt verwijderen?'
+    )
     if (!confirmed) return
 
     try {
       setBusyId(item.id)
+
+      // If it's a removal request, check if we need to purge the hidden content permanently
+      if (item.type === 'removal') {
+        try {
+          if (item.message.trim().startsWith('{')) {
+            const requestData = JSON.parse(item.message)
+            const memoryId = requestData.memoryId
+            const targetMem = memories.find((m) => m.id === memoryId)
+
+            if (requestData.actionType === 'delete_entire') {
+              if (targetMem) {
+                await deleteMemory(memoryId)
+              }
+            } else if (requestData.actionType === 'delete_assets') {
+              if (targetMem && targetMem.collageData) {
+                const selectedAssets = requestData.selectedAssets || []
+                const remainingAssets = targetMem.collageData.assets.filter(
+                  (asset) => !selectedAssets.includes(asset.url)
+                )
+                if (remainingAssets.length === 0) {
+                  await deleteMemory(memoryId)
+                } else {
+                  const updatedBody = JSON.stringify({
+                    ...targetMem.collageData,
+                    assets: remainingAssets,
+                  })
+                  await updateMemory(memoryId, {
+                    title: targetMem.title,
+                    author: targetMem.author,
+                    body: updatedBody,
+                  })
+                }
+              }
+            }
+          }
+        } catch (purgeErr) {
+          console.error('Error during manual feedback purge:', purgeErr)
+        }
+      }
+
       await deleteFeedback(item.id)
       setFeedback((current) => current.filter((f) => f.id !== item.id))
+
+      // Update local memories state if we deleted/modified a memory
+      if (item.type === 'removal') {
+        try {
+          if (item.message.trim().startsWith('{')) {
+            const requestData = JSON.parse(item.message)
+            const memoryId = requestData.memoryId
+            if (requestData.actionType === 'delete_entire') {
+              setMemories((currentMemories) => currentMemories.filter((m) => m.id !== memoryId))
+            } else if (requestData.actionType === 'delete_assets') {
+              const refreshedMemories = await fetchMemories()
+              setMemories(refreshedMemories)
+            }
+          }
+        } catch (err) {
+          console.error('Error updating memories state after feedback deletion:', err)
+        }
+      }
     } catch (deleteError) {
       setError(deleteError.message || 'Bericht verwijderen is mislukt.')
     } finally {
       setBusyId(null)
     }
   }
+
 
   async function handleDeleteMemory(memory) {
     const confirmed = window.confirm(`Weet je zeker dat je "${memory.title}" wilt verwijderen?`)
@@ -345,6 +482,7 @@ export default function AdminPage() {
               memories={memories}
               busyId={busyId}
               onToggleResolved={handleToggleFeedbackResolved}
+              onResolveRequest={handleResolveRemovalRequest}
               onDeleteFeedback={handleDeleteFeedback}
               onDeleteMemory={handleDeleteMemory}
               onUpdateMemory={handleUpdateMemory}
@@ -1009,7 +1147,7 @@ function FeedbackCard({ item, busy, onToggleResolved, onDelete }) {
   )
 }
 
-function RemovalsPanel({ feedback, memories, busyId, onToggleResolved, onDeleteFeedback, onDeleteMemory, onUpdateMemory }) {
+function RemovalsPanel({ feedback, memories, busyId, onToggleResolved, onResolveRequest, onDeleteFeedback, onDeleteMemory, onUpdateMemory }) {
   const unresolvedRemovals = feedback.filter((f) => f.type === 'removal' && !f.resolved)
   const resolvedRemovals = feedback.filter((f) => f.type === 'removal' && f.resolved)
 
@@ -1036,6 +1174,7 @@ function RemovalsPanel({ feedback, memories, busyId, onToggleResolved, onDeleteF
                 memories={memories}
                 busy={busyId === item.id}
                 onToggleResolved={onToggleResolved}
+                onResolveRequest={onResolveRequest}
                 onDeleteFeedback={onDeleteFeedback}
                 onDeleteMemory={onDeleteMemory}
                 onUpdateMemory={onUpdateMemory}
@@ -1062,6 +1201,7 @@ function RemovalsPanel({ feedback, memories, busyId, onToggleResolved, onDeleteF
                 memories={memories}
                 busy={busyId === item.id}
                 onToggleResolved={onToggleResolved}
+                onResolveRequest={onResolveRequest}
                 onDeleteFeedback={onDeleteFeedback}
                 onDeleteMemory={onDeleteMemory}
                 onUpdateMemory={onUpdateMemory}
@@ -1074,7 +1214,7 @@ function RemovalsPanel({ feedback, memories, busyId, onToggleResolved, onDeleteF
   )
 }
 
-function RemovalCard({ item, memories, busy, onToggleResolved, onDeleteFeedback, onDeleteMemory, onUpdateMemory }) {
+function RemovalCard({ item, memories, busy, onToggleResolved, onResolveRequest, onDeleteFeedback, onDeleteMemory, onUpdateMemory }) {
   const isAnon = item.isAnonymous === true
   let requestData = null
   try {
@@ -1095,7 +1235,28 @@ function RemovalCard({ item, memories, busy, onToggleResolved, onDeleteFeedback,
   async function handleIgnore() {
     setLocalBusy(true)
     try {
-      await onToggleResolved(item)
+      const updatedData = {
+        ...requestData,
+        resolvedAt: new Date().toISOString(),
+        actionType: 'ignore',
+      }
+      await onResolveRequest(item, true, JSON.stringify(updatedData))
+    } catch (e) {
+      alert('Fout: ' + e.message)
+    } finally {
+      setLocalBusy(false)
+    }
+  }
+
+  async function handleReopenIgnore() {
+    setLocalBusy(true)
+    try {
+      const restoredData = { ...requestData }
+      delete restoredData.resolvedAt
+      delete restoredData.actionType
+      await onResolveRequest(item, false, JSON.stringify(restoredData))
+    } catch (e) {
+      alert('Fout: ' + e.message)
     } finally {
       setLocalBusy(false)
     }
@@ -1103,17 +1264,28 @@ function RemovalCard({ item, memories, busy, onToggleResolved, onDeleteFeedback,
 
   async function handleDeleteEntire() {
     if (!targetMemory) return
-    const confirmed = window.confirm(`Weet je zeker dat je de gehele herinnering "${targetMemory.title}" wilt verwijderen?`)
+    const confirmed = window.confirm(`Weet je zeker dat je de gehele herinnering "${targetMemory.title}" wilt verbergen? Deze wordt pas na 3 dagen definitief verwijderd.`);
     if (!confirmed) return
 
     setLocalBusy(true)
     try {
-      await onDeleteMemory(targetMemory)
-      if (!item.resolved) {
-        await onToggleResolved(item)
+      const updatedTitle = `[HIDDEN] ${targetMemory.title}`
+      await onUpdateMemory(targetMemory, {
+        title: updatedTitle,
+        author: targetMemory.author,
+        body: targetMemory.body,
+      })
+
+      const updatedData = {
+        ...requestData,
+        resolvedAt: new Date().toISOString(),
+        actionType: 'delete_entire',
+        originalTitle: targetMemory.title,
       }
+
+      await onResolveRequest(item, true, JSON.stringify(updatedData))
     } catch (e) {
-      console.error(e)
+      alert('Kon herinnering niet verbergen: ' + e.message)
     } finally {
       setLocalBusy(false)
     }
@@ -1121,34 +1293,95 @@ function RemovalCard({ item, memories, busy, onToggleResolved, onDeleteFeedback,
 
   async function handleRemoveSelected() {
     if (!targetMemory || !targetMemory.collageData) return
-    const confirmed = window.confirm(`Weet je zeker dat je de geselecteerde ${selectedAssets.length} foto('s) uit de collage wilt verwijderen?`)
+    const confirmed = window.confirm(`Weet je zeker dat je de geselecteerde ${selectedAssets.length} foto('s) wilt verbergen uit de collage? Deze worden pas na 3 dagen definitief verwijderd.`);
     if (!confirmed) return
 
     setLocalBusy(true)
     try {
-      const remainingAssets = targetMemory.collageData.assets.filter(
-        (asset) => !selectedAssets.includes(asset.url)
-      )
+      const updatedAssets = targetMemory.collageData.assets.map((asset) => {
+        if (selectedAssets.includes(asset.url)) {
+          return { ...asset, hidden: true }
+        }
+        return asset
+      })
 
-      if (remainingAssets.length === 0) {
-        await onDeleteMemory(targetMemory)
-      } else {
-        const updatedBody = JSON.stringify({
-          ...targetMemory.collageData,
-          assets: remainingAssets,
-        })
-        await onUpdateMemory(targetMemory, {
-          title: targetMemory.title,
-          author: targetMemory.author,
-          body: updatedBody,
-        })
+      const isAllHidden = updatedAssets.every(a => a.hidden)
+      
+      const updatedBody = JSON.stringify({
+        ...targetMemory.collageData,
+        assets: updatedAssets,
+      })
+
+      await onUpdateMemory(targetMemory, {
+        title: isAllHidden ? `[HIDDEN] ${targetMemory.title}` : targetMemory.title,
+        author: targetMemory.author,
+        body: updatedBody,
+      })
+
+      const updatedData = {
+        ...requestData,
+        resolvedAt: new Date().toISOString(),
+        actionType: 'delete_assets',
+        originalTitle: targetMemory.title,
+        allHidden: isAllHidden,
       }
 
-      if (!item.resolved) {
-        await onToggleResolved(item)
-      }
+      await onResolveRequest(item, true, JSON.stringify(updatedData))
     } catch (err) {
-      alert('Fout bij het bijwerken van de collage: ' + err.message)
+      alert('Kon collage niet bijwerken: ' + err.message)
+    } finally {
+      setLocalBusy(false)
+    }
+  }
+
+  async function handleUndo() {
+    if (!targetMemory) return
+    const confirmed = window.confirm(`Weet je zeker dat je deze actie ongedaan wilt maken? De content wordt meteen weer zichtbaar op de site.`);
+    if (!confirmed) return
+
+    setLocalBusy(true)
+    try {
+      const actionType = requestData?.actionType
+      
+      if (actionType === 'delete_entire') {
+        const restoredTitle = targetMemory.title.replace(/^\[HIDDEN\]\s*/, '')
+        await onUpdateMemory(targetMemory, {
+          title: restoredTitle,
+          author: targetMemory.author,
+          body: targetMemory.body,
+        })
+      } else if (actionType === 'delete_assets') {
+        if (targetMemory.collageData) {
+          const restoredAssets = targetMemory.collageData.assets.map((asset) => {
+            if (selectedAssets.includes(asset.url)) {
+              const { hidden, ...rest } = asset
+              return rest
+            }
+            return asset
+          })
+
+          const restoredTitle = targetMemory.title.replace(/^\[HIDDEN\]\s*/, '')
+
+          await onUpdateMemory(targetMemory, {
+            title: restoredTitle,
+            author: targetMemory.author,
+            body: JSON.stringify({
+              ...targetMemory.collageData,
+              assets: restoredAssets,
+            }),
+          })
+        }
+      }
+
+      const restoredData = { ...requestData }
+      delete restoredData.resolvedAt
+      delete restoredData.actionType
+      delete restoredData.originalTitle
+      delete restoredData.allHidden
+
+      await onResolveRequest(item, false, JSON.stringify(restoredData))
+    } catch (e) {
+      alert('Ongedaan maken is mislukt: ' + e.message)
     } finally {
       setLocalBusy(false)
     }
@@ -1156,6 +1389,13 @@ function RemovalCard({ item, memories, busy, onToggleResolved, onDeleteFeedback,
 
   const isCollage = targetMemory && !!targetMemory.collageData
   const activeBusy = busy || localBusy
+  const hasAction = requestData?.actionType && requestData.actionType !== 'ignore'
+
+  // Format date helper
+  function formatDate(date) {
+    if (!date) return ''
+    return new Date(date).toLocaleDateString('nl-NL', { day: '2-digit', month: '2-digit', year: 'numeric' })
+  }
 
   return (
     <article className="rounded-3xl border border-white/10 bg-white/[0.04] p-5">
@@ -1167,7 +1407,7 @@ function RemovalCard({ item, memories, busy, onToggleResolved, onDeleteFeedback,
             </span>
             {item.resolved ? (
               <span className="rounded-full border border-white/20 bg-white/5 px-3 py-1 text-[0.65rem] uppercase tracking-[0.18em] text-white/35">
-                Opgelost
+                {hasAction ? 'Content Verborgen' : 'Opgelost'}
               </span>
             ) : (
               <span className="rounded-full border border-rose-500/30 bg-rose-500/20 px-3 py-1 text-[0.65rem] uppercase tracking-[0.18em] text-rose-200">
@@ -1197,53 +1437,77 @@ function RemovalCard({ item, memories, busy, onToggleResolved, onDeleteFeedback,
         </div>
 
         <div className="flex flex-row flex-wrap gap-2 sm:flex-col sm:items-stretch sm:justify-start sm:w-48 shrink-0">
-          <button
-            type="button"
-            disabled={activeBusy}
-            onClick={handleIgnore}
-            className={`inline-flex items-center justify-center gap-2 rounded-full border px-4 py-2 text-xs transition disabled:opacity-50 ${
-              item.resolved
-                ? 'border-white/10 text-white/60 hover:bg-white/10'
-                : 'border-emerald-200/20 text-emerald-100 hover:bg-emerald-300/10'
-            }`}
-          >
-            <Check size={14} />
-            {item.resolved ? 'Markeer als open' : 'Markeer opgelost'}
-          </button>
+          {!item.resolved ? (
+            <>
+              <button
+                type="button"
+                disabled={activeBusy}
+                onClick={handleIgnore}
+                className="inline-flex items-center justify-center gap-2 rounded-full border border-emerald-200/20 text-emerald-100 hover:bg-emerald-300/10 px-4 py-2 text-xs transition disabled:opacity-50"
+              >
+                <Check size={14} />
+                Markeer opgelost
+              </button>
 
-          {targetMemory && (
-            <button
-              type="button"
-              disabled={activeBusy}
-              onClick={handleDeleteEntire}
-              className="inline-flex items-center justify-center gap-2 rounded-full border border-rose-200/20 bg-rose-500/10 px-4 py-2 text-xs text-rose-100 transition hover:bg-rose-500/20 disabled:opacity-50"
-            >
-              <Trash2 size={14} />
-              Verwijder geheel
-            </button>
+              {targetMemory && (
+                <button
+                  type="button"
+                  disabled={activeBusy}
+                  onClick={handleDeleteEntire}
+                  className="inline-flex items-center justify-center gap-2 rounded-full border border-rose-200/20 bg-rose-500/10 px-4 py-2 text-xs text-rose-100 transition hover:bg-rose-500/20 disabled:opacity-50"
+                >
+                  <Trash2 size={14} />
+                  Verwijder geheel
+                </button>
+              )}
+
+              {isCollage && selectedAssets.length > 0 && (
+                <button
+                  type="button"
+                  disabled={activeBusy}
+                  onClick={handleRemoveSelected}
+                  className="inline-flex items-center justify-center gap-2 rounded-full border border-purple-300/20 bg-purple-500/15 px-4 py-2 text-xs text-purple-200 transition hover:bg-purple-500/25 disabled:opacity-50"
+                >
+                  <Trash2 size={14} />
+                  Verwijder geselecteerde
+                </button>
+              )}
+            </>
+          ) : (
+            <>
+              {hasAction ? (
+                <button
+                  type="button"
+                  disabled={activeBusy}
+                  onClick={handleUndo}
+                  className="inline-flex items-center justify-center gap-2 rounded-full border border-purple-200/20 text-purple-100 hover:bg-white/10 px-4 py-2 text-xs transition disabled:opacity-50"
+                >
+                  <Check size={14} />
+                  Ongedaan maken
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  disabled={activeBusy}
+                  onClick={handleReopenIgnore}
+                  className="inline-flex items-center justify-center gap-2 rounded-full border border-white/10 text-white/60 hover:bg-white/10 px-4 py-2 text-xs transition disabled:opacity-50"
+                >
+                  <Check size={14} />
+                  Markeer als open
+                </button>
+              )}
+
+              <button
+                type="button"
+                disabled={activeBusy}
+                onClick={() => onDeleteFeedback(item)}
+                className="inline-flex items-center justify-center gap-2 rounded-full border border-rose-200/20 px-4 py-2 text-xs text-rose-100 transition hover:bg-rose-300/10 disabled:opacity-50"
+              >
+                <X size={14} />
+                Verwijder verzoek
+              </button>
+            </>
           )}
-
-          {isCollage && selectedAssets.length > 0 && selectedAssets.length < targetMemory.collageData.assets.length && (
-            <button
-              type="button"
-              disabled={activeBusy}
-              onClick={handleRemoveSelected}
-              className="inline-flex items-center justify-center gap-2 rounded-full border border-purple-300/20 bg-purple-500/15 px-4 py-2 text-xs text-purple-200 transition hover:bg-purple-500/25 disabled:opacity-50"
-            >
-              <Trash2 size={14} />
-              Verwijder geselecteerde
-            </button>
-          )}
-
-          <button
-            type="button"
-            disabled={activeBusy}
-            onClick={() => onDeleteFeedback(item)}
-            className="inline-flex items-center justify-center gap-2 rounded-full border border-white/10 px-4 py-2 text-xs text-white/45 transition hover:bg-white/10 disabled:opacity-50"
-          >
-            <X size={14} />
-            Verwijder verzoek
-          </button>
         </div>
       </div>
 
@@ -1266,33 +1530,46 @@ function RemovalCard({ item, memories, busy, onToggleResolved, onDeleteFeedback,
             </div>
 
             <div className="flex-1 min-w-0">
-              <h5 className="text-sm font-medium text-white truncate">{targetMemory.title}</h5>
+              <h5 className="text-sm font-medium text-white truncate">
+                {targetMemory.title.replace(/^\[HIDDEN\]\s*/, '')}
+                {targetMemory.title.startsWith('[HIDDEN]') && (
+                  <span className="ml-2 rounded-full border border-rose-500/20 bg-rose-500/15 px-2 py-0.5 text-[0.6rem] uppercase tracking-wider text-rose-200">
+                    Verborgen
+                  </span>
+                )}
+              </h5>
               <p className="text-xs text-white/45 mt-1">Type: {targetMemory.type} · Ingezonden door: {targetMemory.author || 'Onbekend'}</p>
               <p className="text-[10px] text-white/25 break-all mt-1">ID: {targetMemory.id}</p>
 
               {isCollage && (
                 <div className="mt-4">
-                  <span className="text-[10px] uppercase tracking-wider text-purple-200/50">Geselecteerde afbeelding(en) voor verwijdering:</span>
+                  <span className="text-[10px] uppercase tracking-wider text-purple-200/50">Afbeeldingen in de collage:</span>
                   <div className="grid grid-cols-4 gap-2 mt-2 max-w-md">
                     {targetMemory.collageData.assets.map((asset, idx) => {
                       const isRequestedToRemove = selectedAssets.includes(asset.url)
+                      const isCurrentlyHidden = asset.hidden === true
                       return (
                         <div
                           key={asset.url}
                           className={`relative aspect-square rounded-lg overflow-hidden border ${
                             isRequestedToRemove
                               ? 'border-rose-500/50 ring-2 ring-rose-500/30'
-                              : 'border-white/10 opacity-40'
-                          }`}
+                              : 'border-white/10'
+                          } ${isCurrentlyHidden && !isRequestedToRemove ? 'opacity-30' : ''}`}
                         >
                           {asset.resourceType === 'video' ? (
                             <video src={asset.url} className="h-full w-full object-cover" muted />
                           ) : (
                             <img src={asset.url} alt={`Collage asset ${idx + 1}`} className="h-full w-full object-cover" />
                           )}
-                          {isRequestedToRemove && (
+                          {isCurrentlyHidden && (
+                            <div className="absolute inset-0 bg-rose-950/70 flex items-center justify-center text-[8px] font-semibold text-rose-200 uppercase tracking-wider">
+                              Verborgen
+                            </div>
+                          )}
+                          {!isCurrentlyHidden && isRequestedToRemove && (
                             <div className="absolute inset-0 bg-rose-500/10 flex items-center justify-center text-[10px] font-semibold text-rose-200">
-                              Verwijder
+                              Geselecteerd
                             </div>
                           )}
                         </div>
@@ -1305,7 +1582,7 @@ function RemovalCard({ item, memories, busy, onToggleResolved, onDeleteFeedback,
           </div>
         ) : (
           <div className="rounded-2xl bg-rose-950/20 p-4 border border-rose-500/10 text-xs text-rose-200/60">
-            Deze herinnering is al verwijderd of kan niet worden gevonden (ID: {memoryId}).
+            Deze herinnering is al definitief verwijderd of kan niet worden gevonden (ID: {memoryId}).
           </div>
         )}
       </div>
